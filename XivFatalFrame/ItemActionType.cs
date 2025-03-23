@@ -1,6 +1,6 @@
 ﻿namespace XivFatalFrame;
 
-public enum ItemActionType : ushort
+internal enum ItemActionType : ushort
 {
     Companion           = 853,
     BuddyEquip          = 1013,

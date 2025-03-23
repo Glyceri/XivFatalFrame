@@ -14,6 +14,7 @@ public class Configuration : IPluginConfiguration
     public bool TakeScreenshotOnEorzeaIncognita         = true;
     public bool TakeScreenshotOnDutyCompletion          = true;
     public bool TakeScreenshotOnLevelup                 = true;
+    public bool TakeScreenshotOnFishCaught              = true;
     public bool TakeScreenshotOnQuestComplete           = true; 
     public bool TakeScreenshotOnItemUnlock              = true;
 

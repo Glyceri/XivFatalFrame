@@ -9,7 +9,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using static FFXIVClientStructs.FFXIV.Component.GUI.AtkUIColorHolder.Delegates;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 
 namespace XivFatalFrame;
@@ -24,7 +23,7 @@ internal unsafe class ScreenshotTaker : IDisposable
     private bool OurScreenshot                  = false;
     private bool OurChat                        = false;
 
-    private readonly List<double> delays        = new List<double>();
+    private readonly List<ScreenshotElement> delays        = new List<ScreenshotElement>();
 
     private delegate byte IsInputIdClickedDelegate(UIInputData* uiInputData, int key);
     private delegate void ShowLogMessageDelegate(RaptureLogModule* logModule, uint logMessageId);
@@ -42,6 +41,8 @@ internal unsafe class ScreenshotTaker : IDisposable
     private readonly DalamudServices DalamudServices;
     private readonly IPluginLog Log;
     private readonly Configuration Configuration;
+
+    private ScreenshotReason lastReason = ScreenshotReason.Unknown;
 
     public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration)
     {
@@ -61,14 +62,14 @@ internal unsafe class ScreenshotTaker : IDisposable
         DalamudServices.ChatGui.CheckMessageHandled += OnChatMessage;
     }
 
-    public void TakeScreenshot(double delay = 0)
+    public void TakeScreenshot(double delay, ScreenshotReason reason)
     {
         if (IsInputIdClickedHook == null) return;
         if (!IsInputIdClickedHook.IsEnabled) return;
 
-        Log.Verbose($"Taking screenshot in: {delay} seconds");
+        Log.Verbose($"Taking screenshot in: {delay} seconds, {reason}");
 
-        delays.Add(delay);
+        delays.Add(new ScreenshotElement(delay, reason));
     }
 
     public void Update(IFramework framework)
@@ -77,9 +78,11 @@ internal unsafe class ScreenshotTaker : IDisposable
 
         for (int i = delayCount - 1; i >= 0; i--)
         {
-            delays[i] -= framework.UpdateDelta.TotalSeconds;
+            delays[i].Timer -= framework.UpdateDelta.TotalSeconds;
 
-            if (delays[i] > 0) continue;
+            if (delays[i].Timer > 0) continue;
+
+            lastReason = delays[i].Reason;
 
             delays.RemoveAt(i);
 
@@ -170,7 +173,7 @@ internal unsafe class ScreenshotTaker : IDisposable
         LSeStringBuilder builder = new LSeStringBuilder();
 
         builder.PushColorRgba(new Vector4(1.0f, 0.4f, 0.4f, 1f));
-        builder.Append("Fatal Frame took a Screenshot.");
+        builder.Append($"Fatal Frame took a Screenshot. [{lastReason}]");
         builder.PopColor();
 
         message.Payloads.Clear();

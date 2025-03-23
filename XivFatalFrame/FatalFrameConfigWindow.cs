@@ -16,12 +16,12 @@ internal class FatalFrameConfigWindow : Window
         Configuration   = configuration;
         DalamudServices = dalamudServices;
 
-        Size            = new Vector2(280, 316);
+        Size            = new Vector2(280, 340);
 
         SizeConstraints = new WindowSizeConstraints()
         {
-            MinimumSize = new Vector2(280, 316),
-            MaximumSize = new Vector2(280, 316),
+            MinimumSize = new Vector2(280, 340),
+            MaximumSize = new Vector2(280, 340),
         };
     }
 
@@ -68,6 +68,11 @@ internal class FatalFrameConfigWindow : Window
         }
 
         if (ImGui.Checkbox("Take Screenshot On Level Up##levelupCheck",                     ref Configuration.TakeScreenshotOnLevelup))
+        {
+            Configuration.Save();
+        }
+
+        if (ImGui.Checkbox("Take Screenshot On New Fish Caught##fishCheck",                 ref Configuration.TakeScreenshotOnFishCaught))
         {
             Configuration.Save();
         }

@@ -133,7 +133,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
             return;
         }
 
-        ScreenshotTaker.TakeScreenshot(1.2);
+        ScreenshotTaker.TakeScreenshot(1.2, ScreenshotReason.Death);
     }
 
     private void CheckFishy()
@@ -147,7 +147,11 @@ internal unsafe class FatalFrameEventHook : IDisposable
         if (fishOutcome != null)
         {
             DalamudServices.PluginLog.Information($"Found new fish caught with ID: {fishOutcome.Value}");
-            ScreenshotTaker.TakeScreenshot(0.6);
+
+            if (Configuration.TakeScreenshotOnFishCaught)
+            {
+                ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.Fish);
+            }
         }
 
         uint? spfishOutcome = CheckFishies(ref _spearFishStore, PlayerState.Instance()->CaughtSpearfishBitmask);
@@ -155,7 +159,11 @@ internal unsafe class FatalFrameEventHook : IDisposable
         {
             spfishOutcome += SpearFishIdOffset;
             DalamudServices.PluginLog.Information($"Found new spearfish caught with ID: {spfishOutcome.Value}");
-            ScreenshotTaker.TakeScreenshot(0.6);
+
+            if (Configuration.TakeScreenshotOnFishCaught)
+            {
+                ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.Fish);
+            }
         }
     }
 
@@ -165,7 +173,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
         
         if (Configuration.TakeScreenshotOnAchievement)
         {
-            ScreenshotTaker.TakeScreenshot(0.6);
+            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.Achievement);
         }
 
         AchievementUnlockingHook!.Original(achievement, achievementID);
@@ -177,7 +185,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         if (Configuration.TakeScreenshotOnEorzeaIncognita)
         {
-            ScreenshotTaker.TakeScreenshot(0.6);
+            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.SightseeingLog);
         }
 
         return VistaUnlockHook!.Original(index, a2, a3);
@@ -249,7 +257,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
             if (Configuration.TakeScreenshotOnQuestComplete)
             {
-                ScreenshotTaker.TakeScreenshot(1.2);
+                ScreenshotTaker.TakeScreenshot(1.2, ScreenshotReason.QuestCompletion);
             }
         }
     }
@@ -258,7 +266,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         if (Configuration.TakeScreenshotOnDutyCompletion)
         {
-            ScreenshotTaker.TakeScreenshot(0.6);
+            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.DutyCompletion);
         }
     }
 
@@ -293,7 +301,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         if (Configuration.TakeScreenshotOnLevelup)
         {
-            ScreenshotTaker.TakeScreenshot(1);
+            ScreenshotTaker.TakeScreenshot(1, ScreenshotReason.LevelUp);
         }
     }
 
@@ -418,7 +426,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         if (Configuration.TakeScreenshotOnItemUnlock)
         {
-            ScreenshotTaker.TakeScreenshot(0.6);
+            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.ItemUnlocked);
         }
     }
 
