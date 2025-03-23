@@ -1,10 +1,16 @@
-﻿using Dalamud.Hooking;
+﻿using Dalamud.Game.Text;
+using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
+using Dalamud.Utility;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
+using static FFXIVClientStructs.FFXIV.Component.GUI.AtkUIColorHolder.Delegates;
+using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 
 namespace XivFatalFrame;
 
@@ -14,12 +20,15 @@ internal unsafe class ScreenshotTaker : IDisposable
     private const int ScreenshotKey             = 546;
 
     private bool TakeScreenshotPressed          = false;
-    private bool SilenceLog                     = false;
+    private bool OurLog                         = false;
+    private bool OurScreenshot                  = false;
+    private bool OurChat                        = false;
 
     private readonly List<double> delays        = new List<double>();
 
     private delegate byte IsInputIdClickedDelegate(UIInputData* uiInputData, int key);
     private delegate void ShowLogMessageDelegate(RaptureLogModule* logModule, uint logMessageId);
+    private delegate nint ScreenShotCallbackDelegate(nint a1, int a2);
 
     [Signature("E9 ?? ?? ?? ?? 83 7F ?? ?? 0F 8F ?? ?? ?? ?? BA ?? ?? ?? ?? 48 8B CB", DetourName = nameof(IsInputIdClickedDetour))]
     private readonly Hook<IsInputIdClickedDelegate>? IsInputIdClickedHook = null;
@@ -27,11 +36,16 @@ internal unsafe class ScreenshotTaker : IDisposable
     [Signature("E9 ?? ?? ?? ?? BA B3 11 00 00", DetourName = nameof(ShowLogMessageDetour))]
     private readonly Hook<ShowLogMessageDelegate>? ShowLogMessageHook = null;
 
+    [Signature("48 89 5C 24 08 57 48 83 EC 20 BB 8B 07 00 00", DetourName = nameof(ScreenShotCallbackDetour))]
+    private readonly Hook<ScreenShotCallbackDelegate>? ScreenShotCallbackHook = null;
+
+    private readonly DalamudServices DalamudServices;
     private readonly IPluginLog Log;
     private readonly Configuration Configuration;
 
     public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration)
     {
+        DalamudServices = dalamudServices;
         Log = dalamudServices.PluginLog;
         Configuration = configuration;
 
@@ -42,6 +56,9 @@ internal unsafe class ScreenshotTaker : IDisposable
     {
         IsInputIdClickedHook?.Enable();
         ShowLogMessageHook?.Enable();
+        ScreenShotCallbackHook?.Enable();
+
+        DalamudServices.ChatGui.CheckMessageHandled += OnChatMessage;
     }
 
     public void TakeScreenshot(double delay = 0)
@@ -77,13 +94,36 @@ internal unsafe class ScreenshotTaker : IDisposable
             return;
         }
 
-        if (SilenceLog)
+        if (OurLog)
         {
-            SilenceLog = false;
-            return;
+            if (Configuration.SilenceLog)
+            {
+                return;
+            }
         }
 
+        OurChat = true;
+
         ShowLogMessageHook?.Original(raptureLogModule, logMessageId);
+    }
+
+    private nint ScreenShotCallbackDetour(nint a1, int a2)
+    {
+        if (OurScreenshot)
+        {
+            OurLog = true;
+        }
+
+        nint outcome = ScreenShotCallbackHook!.Original(a1, a2);
+
+        if (OurLog)
+        {
+            OurLog = false;
+        }
+
+        OurScreenshot = false;
+
+        return outcome;
     }
 
     private byte IsInputIdClickedDetour(UIInputData* uiInputData, int key)
@@ -92,10 +132,7 @@ internal unsafe class ScreenshotTaker : IDisposable
         {
             if (key == ScreenshotKey && TakeScreenshotPressed)
             {
-                if (Configuration.SilenceLog)
-                {
-                    SilenceLog = true;
-                }
+                OurScreenshot = true;
             }
 
             byte outcome = IsInputIdClickedHook!.Original(uiInputData, key);
@@ -116,9 +153,36 @@ internal unsafe class ScreenshotTaker : IDisposable
         return 0;
     }
 
+    private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool handled)
+    {
+        if (!OurChat)
+        {
+            return;
+        }
+
+        OurChat = false;
+
+        if (!Configuration.CustomLogMessage)
+        {
+            return;
+        }
+
+        LSeStringBuilder builder = new LSeStringBuilder();
+
+        builder.PushColorRgba(new Vector4(1.0f, 0.4f, 0.4f, 1f));
+        builder.Append("Fatal Frame took a Screenshot.");
+        builder.PopColor();
+
+        message.Payloads.Clear();
+        message.Payloads.AddRange(builder.ToReadOnlySeString().ToDalamudString().Payloads);
+    }
+
     public void Dispose()
     {
+        DalamudServices.ChatGui.ChatMessage -= OnChatMessage;
+
         IsInputIdClickedHook?.Dispose();
         ShowLogMessageHook?.Dispose();
+        ScreenShotCallbackHook?.Dispose();
     }
 }

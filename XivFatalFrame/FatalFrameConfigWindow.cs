@@ -16,12 +16,12 @@ internal class FatalFrameConfigWindow : Window
         Configuration   = configuration;
         DalamudServices = dalamudServices;
 
-        Size            = new Vector2(280, 288);
+        Size            = new Vector2(280, 316);
 
         SizeConstraints = new WindowSizeConstraints()
         {
-            MinimumSize = new Vector2(280, 288),
-            MaximumSize = new Vector2(280, 288),
+            MinimumSize = new Vector2(280, 316),
+            MaximumSize = new Vector2(280, 316),
         };
     }
 
@@ -77,7 +77,7 @@ internal class FatalFrameConfigWindow : Window
             Configuration.Save();
         }
 
-        if (ImGui.Checkbox("Take Screenshot On new Item Unlocked##questCheck",              ref Configuration.TakeScreenshotOnItemUnlock))
+        if (ImGui.Checkbox("Take Screenshot On Item Unlocked##questCheck",                  ref Configuration.TakeScreenshotOnItemUnlock))
         {
             Configuration.Save();
         }
@@ -88,5 +88,14 @@ internal class FatalFrameConfigWindow : Window
         {
             Configuration.Save();
         }
+
+        ImGui.BeginDisabled(Configuration.SilenceLog);
+
+        if (ImGui.Checkbox("Custom Log##customLog",                                         ref Configuration.CustomLogMessage))
+        {
+            Configuration.Save();
+        }
+
+        ImGui.EndDisabled();
     }
 }

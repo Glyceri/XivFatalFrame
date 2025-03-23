@@ -18,6 +18,7 @@ public class Configuration : IPluginConfiguration
     public bool TakeScreenshotOnItemUnlock              = true;
 
     public bool SilenceLog                              = false;
+    public bool CustomLogMessage                        = true;
 
     [NonSerialized]
     private IDalamudPluginInterface? PluginInterface;
