@@ -1,0 +1,12 @@
+{
+  "Author": "Glyceri",
+  "Name": "Fatal Frame",
+  "Punchline": "Takes a screenshot upon death (and other events).",
+  "Description": "Takes a screenshot upon death (and other events).",
+  "InternalName": "XivFatalFrame",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "Screenshot",
+    "Death"
+  ]
+}
