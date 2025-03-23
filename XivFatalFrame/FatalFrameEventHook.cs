@@ -150,7 +150,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
             if (Configuration.TakeScreenshotOnFishCaught)
             {
-                ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.Fish);
+                ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Fish);
             }
         }
 
@@ -162,7 +162,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
             if (Configuration.TakeScreenshotOnFishCaught)
             {
-                ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.Fish);
+                ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Fish);
             }
         }
     }
@@ -173,7 +173,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
         
         if (Configuration.TakeScreenshotOnAchievement)
         {
-            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.Achievement);
+            ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Achievement);
         }
 
         AchievementUnlockingHook!.Original(achievement, achievementID);
@@ -266,7 +266,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         if (Configuration.TakeScreenshotOnDutyCompletion)
         {
-            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.DutyCompletion);
+            ScreenshotTaker.TakeScreenshot(3, ScreenshotReason.DutyCompletion);
         }
     }
 
