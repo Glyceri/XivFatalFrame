@@ -35,10 +35,10 @@ internal unsafe class FatalFrameEventHook : IDisposable
     private delegate void RaptureAtkModuleUpdateDelegate    (RaptureAtkModule* ram, float deltaTime);
 
     [Signature("81 FA ?? ?? ?? ?? 0F 87 ?? ?? ?? ?? 53",        DetourName = nameof(AchievementUnlockedDetour))]
-    private readonly Hook<OnAchievementUnlockDelegate>?         AchievementUnlockingHook;
+    private readonly Hook<OnAchievementUnlockDelegate>?         AchievementUnlockingHook = null;
 
     [Signature("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 8B 4C 24 70 E8",  DetourName = nameof(OnVistaUnlockedDetour))]
-    private readonly Hook<VistaUnlockedDelegate>?               VistaUnlockHook;
+    private readonly Hook<VistaUnlockedDelegate>?               VistaUnlockHook = null;
 
     private readonly Hook<RaptureAtkModuleUpdateDelegate>?      RaptureAtkModuleUpdateHook;
 
