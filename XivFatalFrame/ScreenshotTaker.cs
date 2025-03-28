@@ -4,6 +4,7 @@ using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using Dalamud.Utility.Signatures;
+using FFXIVClientStructs.FFXIV.Client.System.Photo;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
@@ -16,7 +17,7 @@ namespace XivFatalFrame;
 internal unsafe class ScreenshotTaker : IDisposable
 {
     private const int ScreenshotLogMessageId    = 1931;
-    private const int ScreenshotKey             = 546;
+    private const int ScreenshotKey             = 551;
 
     private bool TakeScreenshotPressed          = false;
     private bool OurLog                         = false;
@@ -144,6 +145,8 @@ internal unsafe class ScreenshotTaker : IDisposable
             {
                 TakeScreenshotPressed = false;
                 outcome = 1;
+
+                Log.Debug("Screenshot");
             }
 
             return outcome;
