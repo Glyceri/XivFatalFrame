@@ -11,17 +11,18 @@ internal class FatalFrameConfigWindow : Window
     private readonly Configuration      Configuration;
     private readonly DalamudServices    DalamudServices;
 
-    public FatalFrameConfigWindow(Configuration configuration, DalamudServices dalamudServices) : base("Fatal Frame", ImGuiWindowFlags.NoResize, true)
+    public FatalFrameConfigWindow(Configuration configuration, DalamudServices dalamudServices) : base("Fatal Frame", ImGuiWindowFlags.None, true)
     {
         Configuration   = configuration;
         DalamudServices = dalamudServices;
 
         Size            = new Vector2(280, 340);
+        SizeCondition   = ImGuiCond.FirstUseEver;
 
         SizeConstraints = new WindowSizeConstraints()
         {
             MinimumSize = new Vector2(280, 340),
-            MaximumSize = new Vector2(280, 340),
+            MaximumSize = new Vector2(360, 900),
         };
     }
 
@@ -47,45 +48,14 @@ internal class FatalFrameConfigWindow : Window
             ImGui.SetTooltip("Support me on Ko-Fi");
         }
 
-        if (ImGui.Checkbox("Take Screenshot On Death##deathCheck",                          ref Configuration.TakeScreenshotOnDeath))
-        {
-            Configuration.Save();
-        }
-
-        if (ImGui.Checkbox("Take Screenshot On Achievement##achievementCheck",              ref Configuration.TakeScreenshotOnAchievement))
-        {
-            Configuration.Save();
-        }
-
-        if (ImGui.Checkbox("Take Screenshot On Sightseeing Log##eorzeaIncCheck",            ref Configuration.TakeScreenshotOnEorzeaIncognita))
-        {
-            Configuration.Save();
-        }
-
-        if (ImGui.Checkbox("Take Screenshot On Duty Completion##dutyCompletionCheck",       ref Configuration.TakeScreenshotOnDutyCompletion))
-        {
-            Configuration.Save();
-        }
-
-        if (ImGui.Checkbox("Take Screenshot On Level Up##levelupCheck",                     ref Configuration.TakeScreenshotOnLevelup))
-        {
-            Configuration.Save();
-        }
-
-        if (ImGui.Checkbox("Take Screenshot On New Fish Caught##fishCheck",                 ref Configuration.TakeScreenshotOnFishCaught))
-        {
-            Configuration.Save();
-        }
-
-        if (ImGui.Checkbox("Take Screenshot On Quest Completion##questCheck",               ref Configuration.TakeScreenshotOnQuestComplete))
-        {
-            Configuration.Save();
-        }
-
-        if (ImGui.Checkbox("Take Screenshot On Item Unlocked##questCheck",                  ref Configuration.TakeScreenshotOnItemUnlock))
-        {
-            Configuration.Save();
-        }
+        DrawPVPSetting("Take Screenshot On Death", ref Configuration.TakeScreenshotOnDeath);
+        DrawSetting("Take Screenshot On Achievement", ref Configuration.TakeScreenshotOnAchievement);
+        DrawSetting("Take Screenshot On Sightseeing Log", ref Configuration.TakeScreenshotOnEorzeaIncognita);
+        DrawPVPSetting("Take Screenshot On Duty Completion", ref Configuration.TakeScreenshotOnDutyCompletion);
+        DrawSetting("Take Screenshot On Level Up", ref Configuration.TakeScreenshotOnLevelup);
+        DrawSetting("Take Screenshot On New Fish Caught", ref Configuration.TakeScreenshotOnFishCaught);
+        DrawSetting("Take Screenshot On Quest Completion", ref Configuration.TakeScreenshotOnQuestComplete);
+        DrawSetting("Take Screenshot On Item Unlocked", ref Configuration.TakeScreenshotOnItemUnlock);
 
         ImGui.NewLine();
 
@@ -97,6 +67,70 @@ internal class FatalFrameConfigWindow : Window
         ImGui.BeginDisabled(Configuration.SilenceLog);
 
         if (ImGui.Checkbox("Custom Log##customLog",                                         ref Configuration.CustomLogMessage))
+        {
+            Configuration.Save();
+        }
+
+        ImGui.EndDisabled();
+    }
+
+    bool DrawHeader(string header)
+    {
+        return ImGui.CollapsingHeader(header + $"##header{header}");
+    }
+
+    bool DrawCheckmark(string header, ref bool value)
+    {
+        return ImGui.Checkbox(header + $"##checkbox{header}", ref value);
+    }
+
+    bool DrawSlider(string header, ref float value)
+    {
+        return ImGui.SliderFloat($"After Delay##checkbox{header}", ref value, 0, 10);
+    }
+
+    void DrawBasicSetting(string header, ref SerializableSetting setting)
+    {
+        if (DrawCheckmark(header, ref setting.TakeScreenshot))
+        {
+            Configuration.Save();
+        }
+
+        ImGui.BeginDisabled(!setting.TakeScreenshot);
+
+        if (DrawSlider(header, ref setting.AfterDelay))
+        {
+            Configuration.Save();
+        }
+
+        ImGui.EndDisabled();
+    }
+
+    void DrawSetting(string header, ref SerializableSetting setting)
+    {
+        if (!DrawHeader(header)) return;
+
+        DrawBasicSetting(header, ref setting);
+    }
+
+    void DrawPVPSetting(string header, ref SerializablePvpSetting setting)
+    {
+        if (!DrawHeader(header)) return;
+
+        SerializableSetting selfSetting = setting;
+
+        DrawBasicSetting(header, ref selfSetting);
+
+        string pvpHeader = header + " for PVP";
+
+        if (DrawCheckmark(pvpHeader, ref setting.EnabledInPvp))
+        {
+            Configuration.Save();
+        }
+
+        ImGui.BeginDisabled(!setting.EnabledInPvp);
+
+        if (DrawSlider(pvpHeader, ref setting.AfterDelayPVP))
         {
             Configuration.Save();
         }

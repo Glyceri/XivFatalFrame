@@ -18,7 +18,8 @@ internal unsafe class FatalFrameEventHook : IDisposable
     private readonly Configuration   Configuration;
     private readonly Sheets          Sheets;
 
-    private bool IsDead = false;
+    private bool IsDead  = false;
+    private bool IsInPvp = false;
 
     private const uint SpearFishIdOffset = 20000;
 
@@ -66,6 +67,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     public void Update(IFramework framework)
     {
         HandleDeathState();
+        HandleClientPVPState();
         CheckFishy();
         CheckQuests();
     }
@@ -128,12 +130,32 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         IsDead = true;
 
-        if (!Configuration.TakeScreenshotOnDeath)
+
+        if (IsInPvp && Configuration.TakeScreenshotOnDeath.EnabledInPvp)
+        {
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath.AfterDelayPVP, ScreenshotReason.Death);
+        }
+        else if (!IsInPvp && Configuration.TakeScreenshotOnDeath.TakeScreenshot)
+        {
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath.AfterDelay, ScreenshotReason.Death);
+        }
+    }
+    
+    private void HandleClientPVPState()
+    {
+        IsInPvp = false;
+
+        if (DalamudServices.ClientState.LocalPlayer == null)
         {
             return;
         }
 
-        ScreenshotTaker.TakeScreenshot(1.2, ScreenshotReason.Death);
+        if (!DalamudServices.ClientState.LocalPlayer.IsValid())
+        {
+            return;
+        }
+
+        IsInPvp = DalamudServices.ClientState.IsPvP;
     }
 
     private void CheckFishy()
@@ -148,9 +170,9 @@ internal unsafe class FatalFrameEventHook : IDisposable
         {
             DalamudServices.PluginLog.Information($"Found new fish caught with ID: {fishOutcome.Value}");
 
-            if (Configuration.TakeScreenshotOnFishCaught)
+            if (Configuration.TakeScreenshotOnFishCaught.TakeScreenshot)
             {
-                ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Fish);
+                ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught.AfterDelay, ScreenshotReason.Fish);
             }
         }
 
@@ -160,9 +182,9 @@ internal unsafe class FatalFrameEventHook : IDisposable
             spfishOutcome += SpearFishIdOffset;
             DalamudServices.PluginLog.Information($"Found new spearfish caught with ID: {spfishOutcome.Value}");
 
-            if (Configuration.TakeScreenshotOnFishCaught)
+            if (Configuration.TakeScreenshotOnFishCaught.TakeScreenshot)
             {
-                ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Fish);
+                ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught.AfterDelay, ScreenshotReason.Fish);
             }
         }
     }
@@ -171,9 +193,9 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.PluginLog.Information($"Detected Acquired Achievement with ID: {achievementID}");
         
-        if (Configuration.TakeScreenshotOnAchievement)
+        if (Configuration.TakeScreenshotOnAchievement.TakeScreenshot)
         {
-            ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Achievement);
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnAchievement.AfterDelay, ScreenshotReason.Achievement);
         }
 
         AchievementUnlockingHook!.Original(achievement, achievementID);
@@ -183,9 +205,9 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.PluginLog.Information($"Detected a vista unlocked at index: {index}");
 
-        if (Configuration.TakeScreenshotOnEorzeaIncognita)
+        if (Configuration.TakeScreenshotOnEorzeaIncognita.TakeScreenshot)
         {
-            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.SightseeingLog);
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnEorzeaIncognita.AfterDelay, ScreenshotReason.SightseeingLog);
         }
 
         return VistaUnlockHook!.Original(index, a2, a3);
@@ -255,18 +277,22 @@ internal unsafe class FatalFrameEventHook : IDisposable
             _questsCompleted.Add(questRowID);
             DalamudServices.PluginLog.Information($"Quest with ID {questRowID} and name {quest.Name.ExtractText()} has been found.");
 
-            if (Configuration.TakeScreenshotOnQuestComplete)
+            if (Configuration.TakeScreenshotOnQuestComplete.TakeScreenshot)
             {
-                ScreenshotTaker.TakeScreenshot(1.2, ScreenshotReason.QuestCompletion);
+                ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnQuestComplete.AfterDelay, ScreenshotReason.QuestCompletion);
             }
         }
     }
 
     private void OnDutyCompleted(object? _, ushort dutyID)
     {
-        if (Configuration.TakeScreenshotOnDutyCompletion)
+        if (IsInPvp && Configuration.TakeScreenshotOnDutyCompletion.EnabledInPvp)
         {
-            ScreenshotTaker.TakeScreenshot(3, ScreenshotReason.DutyCompletion);
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath.AfterDelayPVP, ScreenshotReason.DutyCompletion);
+        }
+        else if (!IsInPvp && Configuration.TakeScreenshotOnDutyCompletion.TakeScreenshot)
+        {
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath.AfterDelay, ScreenshotReason.DutyCompletion);
         }
     }
 
@@ -299,9 +325,9 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         DalamudServices.PluginLog.Information($"The class: {classJobId}, {arrayIndex}, {classJob.Value.Name.ExtractText()} leveled up from: {currentLevel} to {level}. This has been marked.");
 
-        if (Configuration.TakeScreenshotOnLevelup)
+        if (Configuration.TakeScreenshotOnLevelup.TakeScreenshot)
         {
-            ScreenshotTaker.TakeScreenshot(1, ScreenshotReason.LevelUp);
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnLevelup.AfterDelay, ScreenshotReason.LevelUp);
         }
     }
 
@@ -424,9 +450,9 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
     private void CollectedNewItem()
     {
-        if (Configuration.TakeScreenshotOnItemUnlock)
+        if (Configuration.TakeScreenshotOnItemUnlock.TakeScreenshot)
         {
-            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.ItemUnlocked);
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnItemUnlock.AfterDelay, ScreenshotReason.ItemUnlocked);
         }
     }
 

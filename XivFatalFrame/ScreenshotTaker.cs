@@ -104,9 +104,9 @@ internal unsafe class ScreenshotTaker : IDisposable
             {
                 return;
             }
-        }
 
-        OurChat = true;
+            OurChat = true;
+        }
 
         ShowLogMessageHook?.Original(raptureLogModule, logMessageId);
     }
@@ -145,8 +145,6 @@ internal unsafe class ScreenshotTaker : IDisposable
             {
                 TakeScreenshotPressed = false;
                 outcome = 1;
-
-                Log.Debug("Screenshot");
             }
 
             return outcome;
@@ -181,6 +179,8 @@ internal unsafe class ScreenshotTaker : IDisposable
 
         message.Payloads.Clear();
         message.Payloads.AddRange(builder.ToReadOnlySeString().ToDalamudString().Payloads);
+
+        lastReason = ScreenshotReason.Unknown;
     }
 
     public void Dispose()
