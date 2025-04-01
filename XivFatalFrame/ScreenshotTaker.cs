@@ -93,19 +93,17 @@ internal unsafe class ScreenshotTaker : IDisposable
 
     private void ShowLogMessageDetour(RaptureLogModule* raptureLogModule, uint logMessageId)
     {
-        if (logMessageId != ScreenshotLogMessageId)
+        if (logMessageId == ScreenshotLogMessageId)
         {
-            return;
-        }
-
-        if (OurLog)
-        {
-            if (Configuration.SilenceLog)
+            if (OurLog)
             {
-                return;
-            }
+                if (Configuration.SilenceLog)
+                {
+                    return;
+                }
 
-            OurChat = true;
+                OurChat = true;
+            }
         }
 
         ShowLogMessageHook?.Original(raptureLogModule, logMessageId);
