@@ -22,19 +22,27 @@ internal class FatalFrameConfigWindow : Window
         SizeConstraints = new WindowSizeConstraints()
         {
             MinimumSize = new Vector2(280, 340),
-            MaximumSize = new Vector2(360, 900),
+            MaximumSize = new Vector2(430, 900),
         };
     }
 
     public override void Draw()
     {
-        ImGui.Text("Fatal Frame Version".PadRight(50) + $"[{DalamudServices.Version}]");
+        ImGui.Text("Fatal Frame Version");
+
+        string versionText = $"[{DalamudServices.Version}]";
+
+        Vector2 textSize = ImGui.CalcTextSize(versionText);
+
+        ImGui.SameLine();  
+
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - 30 - textSize.X - ImGui.GetStyle().ItemSpacing.X);
+
+        ImGui.Text(versionText);
 
         ImGui.SameLine();
 
         ImGui.PushFont(UiBuilder.IconFont);
-
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - 30);
 
         if (ImGui.Button(FontAwesomeIcon.Coffee.ToIconString()))
         {
