@@ -8,8 +8,10 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using XivFatalFrame.Screenshotter;
+using XivFatalFrame.Services;
 
-namespace XivFatalFrame;
+namespace XivFatalFrame.Hooking;
 
 internal unsafe class FatalFrameEventHook : IDisposable
 {

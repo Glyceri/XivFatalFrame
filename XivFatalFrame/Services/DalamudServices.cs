@@ -3,7 +3,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using System.Reflection;
 
-namespace XivFatalFrame;
+namespace XivFatalFrame.Services;
 
 internal sealed class DalamudServices
 {

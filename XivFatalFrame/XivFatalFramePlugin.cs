@@ -1,6 +1,10 @@
 ﻿using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using XivFatalFrame.Hooking;
+using XivFatalFrame.Screenshotter;
+using XivFatalFrame.Services;
+using XivFatalFrame.Windowing;
 
 namespace XivFatalFrame;
 

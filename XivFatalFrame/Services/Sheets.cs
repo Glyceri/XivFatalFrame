@@ -2,7 +2,7 @@
 using Lumina.Excel;
 using System.Linq;
 
-namespace XivFatalFrame;
+namespace XivFatalFrame.Services;
 
 internal class Sheets
 {

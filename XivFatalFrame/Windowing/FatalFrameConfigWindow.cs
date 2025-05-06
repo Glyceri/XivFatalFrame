@@ -3,8 +3,9 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
 using ImGuiNET;
 using System.Numerics;
+using XivFatalFrame.Services;
 
-namespace XivFatalFrame;
+namespace XivFatalFrame.Windowing;
 
 internal class FatalFrameConfigWindow : Window
 {

@@ -1,4 +1,4 @@
-﻿namespace XivFatalFrame;
+﻿namespace XivFatalFrame.Screenshotter;
 
 internal enum ScreenshotReason
 {

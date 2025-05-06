@@ -12,7 +12,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 
-namespace XivFatalFrame;
+namespace XivFatalFrame.Screenshotter;
 
 internal unsafe class ScreenshotTaker : IDisposable
 {
@@ -24,7 +24,7 @@ internal unsafe class ScreenshotTaker : IDisposable
     private bool OurScreenshot                  = false;
     private bool OurChat                        = false;
 
-    private readonly List<ScreenshotElement> delays        = new List<ScreenshotElement>();
+    private readonly List<ScreenshotElement> delays = new List<ScreenshotElement>();
 
     private delegate byte IsInputIdClickedDelegate(UIInputData* uiInputData, int key);
     private delegate void ShowLogMessageDelegate(RaptureLogModule* logModule, uint logMessageId);
