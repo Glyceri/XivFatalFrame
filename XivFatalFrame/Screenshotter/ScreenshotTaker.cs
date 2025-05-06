@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using XivFatalFrame.Services;
 using XivFatalFrame.SteamAPI;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 

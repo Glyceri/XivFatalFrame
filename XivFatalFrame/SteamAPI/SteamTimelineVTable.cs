@@ -3,7 +3,7 @@
 namespace XivFatalFrame.SteamAPI;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public unsafe struct SteamTimelineVTable
+internal unsafe struct SteamTimelineVTable
 {
     public delegate* unmanaged<SteamTimeline*, char*, float, void>                                                          SetTimelineTooltip;
     public delegate* unmanaged<SteamTimeline*, float, void>                                                                 ClearTimelineTooltip;
