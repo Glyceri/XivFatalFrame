@@ -48,8 +48,8 @@ internal unsafe class ScreenshotTaker : IDisposable
     public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration)
     {
         DalamudServices = dalamudServices;
-        Log = dalamudServices.PluginLog;
-        Configuration = configuration;
+        Log             = dalamudServices.PluginLog;
+        Configuration   = configuration;
 
         dalamudServices.Hooking.InitializeFromAttributes(this);
     }
