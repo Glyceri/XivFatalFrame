@@ -170,35 +170,14 @@ internal unsafe partial struct SteamTimeline
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf8)]
     private static partial nint GetProcAddress(nint module, string procName);
 
-    public static SteamTimeline* Get(IPluginLog pluginLog)
+    public static SteamTimeline* Get(IPluginLog pluginLog, SteamHelper steamHelper)
     {
         if (Instance != null)
         {
             return Instance;
         }
 
-        Framework* framework = Framework.Instance();
-        if (framework == null)
-        {
-            pluginLog.Debug("Framework was null");
-            return null;
-        }
-
-        bool isSteamGame = framework->IsSteamGame;
-        if (!isSteamGame)
-        {
-            pluginLog.Debug("Game is not a Steam game.");
-            return null;
-        }
-
-        bool steamApiInitialized = framework->IsSteamApiInitialized();
-        if (!steamApiInitialized)
-        {
-            pluginLog.Debug("Steam API was not initialized.");
-            return null;
-        }
-
-        nint handle = framework->SteamApiLibraryHandle;
+        nint handle = steamHelper.GetSteamApiLibraryHandle();
         if (handle == nint.Zero)
         {
             pluginLog.Debug("Steam API library handle was null");

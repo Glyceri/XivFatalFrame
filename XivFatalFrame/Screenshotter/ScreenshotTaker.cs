@@ -40,17 +40,19 @@ internal unsafe class ScreenshotTaker : IDisposable
     [Signature("48 89 5C 24 08 57 48 83 EC 20 BB 8B 07 00 00", DetourName = nameof(ScreenShotCallbackDetour))]
     private readonly Hook<ScreenShotCallbackDelegate>? ScreenShotCallbackHook = null;
 
-    private readonly DalamudServices DalamudServices;
-    private readonly IPluginLog Log;
-    private readonly Configuration Configuration;
+    private readonly DalamudServices    DalamudServices;
+    private readonly IPluginLog         Log;
+    private readonly Configuration      Configuration;
+    private readonly SteamHelper        SteamHelper;
 
     private ScreenshotReason lastReason = ScreenshotReason.Unknown;
 
-    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration)
+    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, SteamHelper steamHelper)
     {
         DalamudServices = dalamudServices;
         Log             = dalamudServices.PluginLog;
         Configuration   = configuration;
+        SteamHelper     = steamHelper;
 
         dalamudServices.Hooking.InitializeFromAttributes(this);
     }
@@ -192,7 +194,7 @@ internal unsafe class ScreenshotTaker : IDisposable
             return;
         }
 
-        SteamTimeline* steamTimeline = SteamTimeline.Get(Log);
+        SteamTimeline* steamTimeline = SteamTimeline.Get(Log, SteamHelper);
         if (steamTimeline == null)
         {
             Log.Verbose($"Tried adding to Steam Timeline but SteamTimeline is null.");

@@ -4,6 +4,7 @@ using Dalamud.Utility;
 using ImGuiNET;
 using System.Numerics;
 using XivFatalFrame.Services;
+using XivFatalFrame.SteamAPI;
 
 namespace XivFatalFrame.Windowing;
 
@@ -11,11 +12,13 @@ internal class FatalFrameConfigWindow : Window
 {
     private readonly Configuration      Configuration;
     private readonly DalamudServices    DalamudServices;
+    private readonly SteamHelper        SteamHelper;
 
-    public FatalFrameConfigWindow(Configuration configuration, DalamudServices dalamudServices) : base("Fatal Frame", ImGuiWindowFlags.None, true)
+    public FatalFrameConfigWindow(Configuration configuration, DalamudServices dalamudServices, SteamHelper steamHelper) : base("Fatal Frame", ImGuiWindowFlags.None, true)
     {
         Configuration   = configuration;
         DalamudServices = dalamudServices;
+        SteamHelper     = steamHelper;
 
         Size            = new Vector2(280, 340);
         SizeCondition   = ImGuiCond.FirstUseEver;
@@ -65,6 +68,16 @@ internal class FatalFrameConfigWindow : Window
         DrawSetting("Take Screenshot On New Fish Caught", ref Configuration.TakeScreenshotOnFishCaught);
         DrawSetting("Take Screenshot On Quest Completion", ref Configuration.TakeScreenshotOnQuestComplete);
         DrawSetting("Take Screenshot On Item Unlocked", ref Configuration.TakeScreenshotOnItemUnlock);
+
+        if (SteamHelper.IsSteamInstance() && SteamHelper.IsSteamApiInitialized())
+        {
+            ImGui.NewLine();
+
+            if (ImGui.Checkbox("Add event to Timeline on Steam##steamEvent", ref Configuration.AddMarkToSteamTimelines))
+            {
+                Configuration.Save();
+            }
+        }
 
         ImGui.NewLine();
 

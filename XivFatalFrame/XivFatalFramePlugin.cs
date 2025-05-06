@@ -21,18 +21,21 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     private readonly FatalFrameEventHook        FatalFrameEventHook;
     private readonly WindowSystem               WindowSystem;
     private readonly FatalFrameConfigWindow     FatalFrameConfigWindow;
+    private readonly SteamHelper                SteamHelper;
 
     public XivFatalFramePlugin(IDalamudPluginInterface pluginInterface)
     {
         PluginInterface         = pluginInterface;
         DalamudServices         = DalamudServices.Create(PluginInterface, this);
 
+        SteamHelper             = new SteamHelper(DalamudServices.PluginLog);
+
         Sheets                  = new Sheets(DalamudServices);
 
         Configuration           = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration           .Initialize(PluginInterface);
 
-        ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration);
+        ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, SteamHelper);
         ScreenshotTaker         .Init();
 
         FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets);
@@ -45,7 +48,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
 
         WindowSystem            = new WindowSystem("FatalFrame");
 
-        FatalFrameConfigWindow  = new FatalFrameConfigWindow(Configuration, DalamudServices);
+        FatalFrameConfigWindow  = new FatalFrameConfigWindow(Configuration, DalamudServices, SteamHelper);
 
         WindowSystem.AddWindow(FatalFrameConfigWindow);
 
