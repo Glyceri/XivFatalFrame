@@ -18,8 +18,10 @@ public class Configuration : IPluginConfiguration
     public SerializableSetting    TakeScreenshotOnQuestComplete     = null!;
     public SerializableSetting    TakeScreenshotOnItemUnlock        = null!;
 
-    public bool SilenceLog        = false;
-    public bool CustomLogMessage  = true;
+    public bool AddMarkToSteamTimelines = true;
+
+    public bool SilenceLog              = false;
+    public bool CustomLogMessage        = true;
 
     [NonSerialized]
     private IDalamudPluginInterface? PluginInterface;

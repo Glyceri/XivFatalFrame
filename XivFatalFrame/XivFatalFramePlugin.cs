@@ -4,6 +4,7 @@ using Dalamud.Plugin.Services;
 using XivFatalFrame.Hooking;
 using XivFatalFrame.Screenshotter;
 using XivFatalFrame.Services;
+using XivFatalFrame.SteamAPI;
 using XivFatalFrame.Windowing;
 
 namespace XivFatalFrame;
@@ -91,6 +92,8 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         DalamudServices.Framework.Update -= Update;
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         ScreenshotTaker.Dispose();
-        FatalFrameEventHook.Dispose();   
+        FatalFrameEventHook.Dispose();
+
+        SteamTimeline.Dispose();
     }
 }

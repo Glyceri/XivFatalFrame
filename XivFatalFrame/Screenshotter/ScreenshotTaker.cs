@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using XivFatalFrame.SteamAPI;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 
 namespace XivFatalFrame.Screenshotter;
@@ -69,6 +70,8 @@ internal unsafe class ScreenshotTaker : IDisposable
         if (!IsInputIdClickedHook.IsEnabled) return;
 
         Log.Verbose($"Taking screenshot in: {delay} seconds, {reason}");
+
+        HandleSteamTimeline(reason, delay);
 
         delays.Add(new ScreenshotElement(delay, reason));
     }
@@ -179,6 +182,32 @@ internal unsafe class ScreenshotTaker : IDisposable
         message.Payloads.AddRange(builder.ToReadOnlySeString().ToDalamudString().Payloads);
 
         lastReason = ScreenshotReason.Unknown;
+    }
+
+    private void HandleSteamTimeline(ScreenshotReason reason, double delay)
+    {
+        if (!Configuration.AddMarkToSteamTimelines)
+        {
+            Log.Verbose($"Tried adding to Steam Timeline but Configuration disallowed it.");
+            return;
+        }
+
+        SteamTimeline* steamTimeline = SteamTimeline.Get(Log);
+        if (steamTimeline == null)
+        {
+            Log.Verbose($"Tried adding to Steam Timeline but SteamTimeline is null.");
+            return;
+        }
+
+        nint eventHandle = steamTimeline->AddInstantaneousTimelineEvent("FreezeFrameEvent", $"{reason}", SteamTimeline.GetSteamIconForReason(reason), 0, (float)delay, ETimelineEventClipPriority.Featured);
+        if (eventHandle == nint.Zero)
+        {
+            Log.Debug($"Tried adding to Steam Timeline but it failed.");
+        }
+        else
+        {
+            Log.Verbose($"Successfully added {reason} after {delay} to Steam Timeline.");
+        }
     }
 
     public void Dispose()

@@ -1,10 +1,11 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text;
+using XivFatalFrame.Screenshotter;
 
 namespace XivFatalFrame.SteamAPI;
 
 [StructLayout(LayoutKind.Explicit, Pack = 1)]
-public unsafe partial struct SteamTimeline
+internal unsafe partial struct SteamTimeline
 {
     [FieldOffset(0x0)] public SteamTimelineVTable* VTable;
 
@@ -169,23 +170,24 @@ public unsafe partial struct SteamTimeline
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf8)]
     private static partial nint GetProcAddress(nint module, string procName);
 
-    public static SteamTimeline* Get(IPluginLog pluginLog, uint? appId = null)
+    public static SteamTimeline* Get(IPluginLog pluginLog)
     {
         if (Instance != null)
         {
             return Instance;
         }
 
-        if (appId == null)
-        {
-            pluginLog.Debug("appId is null");
-            return null;
-        }
-
         Framework* framework = Framework.Instance();
         if (framework == null)
         {
             pluginLog.Debug("Framework was null");
+            return null;
+        }
+
+        bool isSteamGame = framework->IsSteamGame;
+        if (!isSteamGame)
+        {
+            pluginLog.Debug("Game is not a Steam game.");
             return null;
         }
 
@@ -246,6 +248,22 @@ public unsafe partial struct SteamTimeline
 
             return Instance;
         }
+    }
+
+    internal static string GetSteamIconForReason(ScreenshotReason reason)
+    {
+        return reason switch
+        {
+            ScreenshotReason.Death           => "steam_death",
+            ScreenshotReason.Achievement     => "steam_achievement",
+            ScreenshotReason.SightseeingLog  => "steam_screenshot",
+            ScreenshotReason.DutyCompletion  => "steam_completed",
+            ScreenshotReason.LevelUp         => "steam_effect",
+            ScreenshotReason.QuestCompletion => "steam_checkmark",
+            ScreenshotReason.ItemUnlocked    => "steam_chest",
+            ScreenshotReason.Fish            => "steam_crown",
+            _                                => "steam_marker",
+        };
     }
 
     public static void Dispose()
