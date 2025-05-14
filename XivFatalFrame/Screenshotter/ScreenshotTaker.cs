@@ -13,6 +13,7 @@ using System.Numerics;
 using XivFatalFrame.PVPHelpers.Interfaces;
 using XivFatalFrame.Services;
 using XivFatalFrame.SteamAPI;
+using XivFatalFrame.SteamAPI.Timeline;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 
 namespace XivFatalFrame.Screenshotter;
@@ -128,7 +129,9 @@ internal unsafe class ScreenshotTaker : IDisposable
             return;
         }
 
-        delays.Add(new ScreenshotElement(delay, reason));
+        ScreenshotElement screenshotElement = new ScreenshotElement(delay, reason);
+
+        delays.Add(screenshotElement);
     }
 
     public void Update(IFramework framework)

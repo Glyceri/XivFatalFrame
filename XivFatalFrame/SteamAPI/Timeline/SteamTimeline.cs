@@ -3,6 +3,7 @@ using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using System.Runtime.InteropServices;
 using System.Text;
 using XivFatalFrame.Screenshotter;
+using XivFatalFrame.SteamAPI.Timeline;
 
 namespace XivFatalFrame.SteamAPI;
 
