@@ -2,6 +2,7 @@
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using XivFatalFrame.Hooking;
+using XivFatalFrame.PVPHelpers;
 using XivFatalFrame.Screenshotter;
 using XivFatalFrame.Services;
 using XivFatalFrame.SteamAPI;
@@ -17,6 +18,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     private readonly Sheets                     Sheets;
     private readonly IDalamudPluginInterface    PluginInterface;
     private readonly Configuration              Configuration;
+    private readonly PVPHelper                  PVPHelper;
     private readonly ScreenshotTaker            ScreenshotTaker;
     private readonly FatalFrameEventHook        FatalFrameEventHook;
     private readonly WindowSystem               WindowSystem;
@@ -35,10 +37,12 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         Configuration           = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration           .Initialize(PluginInterface);
 
-        ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, SteamHelper);
+        PVPHelper               = new PVPHelper();
+
+        ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, SteamHelper, PVPHelper);
         ScreenshotTaker         .Init();
 
-        FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets);
+        FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets, PVPHelper);
 
         DalamudServices.CommandManager.AddHandler(FatalFrameCommand, new Dalamud.Game.Command.CommandInfo(OnCommand)
         {

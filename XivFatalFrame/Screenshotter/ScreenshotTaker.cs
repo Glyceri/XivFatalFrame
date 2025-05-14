@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using XivFatalFrame.PVPHelpers.Interfaces;
 using XivFatalFrame.Services;
 using XivFatalFrame.SteamAPI;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
@@ -45,15 +46,17 @@ internal unsafe class ScreenshotTaker : IDisposable
     private readonly IPluginLog         Log;
     private readonly Configuration      Configuration;
     private readonly SteamHelper        SteamHelper;
+    private readonly IPVPReader         PVPReader;
 
     private ScreenshotReason lastReason = ScreenshotReason.Unknown;
 
-    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, SteamHelper steamHelper)
+    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, SteamHelper steamHelper, IPVPReader pvpReader)
     {
         DalamudServices = dalamudServices;
         Log             = dalamudServices.PluginLog;
         Configuration   = configuration;
         SteamHelper     = steamHelper;
+        PVPReader       = pvpReader;
 
         dalamudServices.Hooking.InitializeFromAttributes(this);
     }
@@ -67,7 +70,43 @@ internal unsafe class ScreenshotTaker : IDisposable
         DalamudServices.ChatGui.CheckMessageHandled += OnChatMessage;
     }
 
-    public void TakeScreenshot(double delay, ScreenshotReason reason)
+    public void TakeScreenshot(SerializableSetting setting, ScreenshotReason reason)
+    {
+        if (setting is SerializablePvpSetting pvpSetting && PVPReader.IsInPVP)
+        {
+            HandleAsPVP(pvpSetting, reason);
+        }
+        else
+        {
+            HandleAsPVE(setting, reason);
+        }
+    }
+
+    private void HandleAsPVP(SerializablePvpSetting pvpSetting, ScreenshotReason reason)
+    {
+        if (!pvpSetting.EnabledInPvp)
+        {
+            Log.Verbose($"Want's to take a screenshot but the config disallowed it in a pvp setting.");
+
+            return;
+        }
+
+        TakeScreenshot(pvpSetting.AfterDelayPVP, reason);
+    }
+
+    private void HandleAsPVE(SerializableSetting setting, ScreenshotReason reason)
+    {
+        if (!setting.TakeScreenshot)
+        {
+            Log.Verbose($"Want's to take a screenshot but the config disallowed it.");
+
+            return;
+        }
+
+        TakeScreenshot(setting.AfterDelay, reason);
+    }
+
+    private void TakeScreenshot(double delay, ScreenshotReason reason)
     {
         if (IsInputIdClickedHook == null) return;
         if (!IsInputIdClickedHook.IsEnabled) return;
@@ -75,6 +114,19 @@ internal unsafe class ScreenshotTaker : IDisposable
         Log.Verbose($"Taking screenshot in: {delay} seconds, {reason}");
 
         HandleSteamTimeline(reason, delay);
+
+        AddScreenshotToQueue(delay, reason);
+    }
+
+    private void AddScreenshotToQueue(double delay, ScreenshotReason reason)
+    {
+        // No way should there ever be queued more than 5 at once, this is just a safety precaution in case I pull a Glyceri moment later.
+        if (delays.Count > 5)
+        {
+            Log.Verbose($"Screenshot got waived due to max cap being reached.");
+
+            return;
+        }
 
         delays.Add(new ScreenshotElement(delay, reason));
     }
