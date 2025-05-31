@@ -4,7 +4,6 @@ using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using Dalamud.Utility.Signatures;
-using FFXIVClientStructs.FFXIV.Client.System.Photo;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
@@ -12,8 +11,6 @@ using System.Collections.Generic;
 using System.Numerics;
 using XivFatalFrame.PVPHelpers.Interfaces;
 using XivFatalFrame.Services;
-using XivFatalFrame.SteamAPI;
-using XivFatalFrame.SteamAPI.Timeline;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 
 namespace XivFatalFrame.Screenshotter;
@@ -46,17 +43,15 @@ internal unsafe class ScreenshotTaker : IDisposable
     private readonly DalamudServices    DalamudServices;
     private readonly IPluginLog         Log;
     private readonly Configuration      Configuration;
-    private readonly SteamHelper        SteamHelper;
     private readonly IPVPReader         PVPReader;
 
     private ScreenshotReason lastReason = ScreenshotReason.Unknown;
 
-    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, SteamHelper steamHelper, IPVPReader pvpReader)
+    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, IPVPReader pvpReader)
     {
         DalamudServices = dalamudServices;
         Log             = dalamudServices.PluginLog;
         Configuration   = configuration;
-        SteamHelper     = steamHelper;
         PVPReader       = pvpReader;
 
         dalamudServices.Hooking.InitializeFromAttributes(this);
@@ -113,8 +108,6 @@ internal unsafe class ScreenshotTaker : IDisposable
         if (!IsInputIdClickedHook.IsEnabled) return;
 
         Log.Verbose($"Taking screenshot in: {delay} seconds, {reason}");
-
-        HandleSteamTimeline(reason, delay);
 
         AddScreenshotToQueue(delay, reason);
     }
@@ -240,32 +233,6 @@ internal unsafe class ScreenshotTaker : IDisposable
         message.Payloads.AddRange(builder.ToReadOnlySeString().ToDalamudString().Payloads);
 
         lastReason = ScreenshotReason.Unknown;
-    }
-
-    private void HandleSteamTimeline(ScreenshotReason reason, double delay)
-    {
-        if (!Configuration.AddMarkToSteamTimelines)
-        {
-            Log.Verbose($"Tried adding to Steam Timeline but Configuration disallowed it.");
-            return;
-        }
-
-        SteamTimeline* steamTimeline = SteamTimeline.Get(Log, SteamHelper);
-        if (steamTimeline == null)
-        {
-            Log.Verbose($"Tried adding to Steam Timeline but SteamTimeline is null.");
-            return;
-        }
-
-        nint eventHandle = steamTimeline->AddInstantaneousTimelineEvent("FreezeFrameEvent", $"{reason}", SteamTimeline.GetSteamIconForReason(reason), 0, (float)delay, ETimelineEventClipPriority.Featured);
-        if (eventHandle == nint.Zero)
-        {
-            Log.Debug($"Tried adding to Steam Timeline but it failed.");
-        }
-        else
-        {
-            Log.Verbose($"Successfully added {reason} after {delay} to Steam Timeline.");
-        }
     }
 
     public void Dispose()

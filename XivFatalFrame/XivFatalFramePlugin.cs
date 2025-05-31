@@ -5,7 +5,6 @@ using XivFatalFrame.Hooking;
 using XivFatalFrame.PVPHelpers;
 using XivFatalFrame.Screenshotter;
 using XivFatalFrame.Services;
-using XivFatalFrame.SteamAPI;
 using XivFatalFrame.Windowing;
 
 namespace XivFatalFrame;
@@ -23,14 +22,11 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     private readonly FatalFrameEventHook        FatalFrameEventHook;
     private readonly WindowSystem               WindowSystem;
     private readonly FatalFrameConfigWindow     FatalFrameConfigWindow;
-    private readonly SteamHelper                SteamHelper;
 
     public XivFatalFramePlugin(IDalamudPluginInterface pluginInterface)
     {
         PluginInterface         = pluginInterface;
         DalamudServices         = DalamudServices.Create(PluginInterface, this);
-
-        SteamHelper             = new SteamHelper(DalamudServices.PluginLog);
 
         Sheets                  = new Sheets(DalamudServices);
 
@@ -39,7 +35,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
 
         PVPHelper               = new PVPHelper();
 
-        ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, SteamHelper, PVPHelper);
+        ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, PVPHelper);
         ScreenshotTaker         .Init();
 
         FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets, PVPHelper);
@@ -52,7 +48,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
 
         WindowSystem            = new WindowSystem("FatalFrame");
 
-        FatalFrameConfigWindow  = new FatalFrameConfigWindow(Configuration, DalamudServices, SteamHelper);
+        FatalFrameConfigWindow  = new FatalFrameConfigWindow(Configuration, DalamudServices);
 
         WindowSystem.AddWindow(FatalFrameConfigWindow);
 
@@ -100,7 +96,5 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         ScreenshotTaker.Dispose();
         FatalFrameEventHook.Dispose();
-
-        SteamTimeline.Dispose();
     }
 }
