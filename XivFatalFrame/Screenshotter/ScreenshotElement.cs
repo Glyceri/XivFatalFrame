@@ -1,13 +1,13 @@
-﻿namespace XivFatalFrame;
+﻿namespace XivFatalFrame.Screenshotter;
 
 internal class ScreenshotElement
 {
-    public double Timer;
+    public          double           Timer;
     public readonly ScreenshotReason Reason;
 
     public ScreenshotElement(double timer, ScreenshotReason reason)
     {
-        Timer = timer;
+        Timer  = timer;
         Reason = reason;
     }
 }

@@ -8,8 +8,11 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using XivFatalFrame.PVPHelpers.Interfaces;
+using XivFatalFrame.Screenshotter;
+using XivFatalFrame.Services;
 
-namespace XivFatalFrame;
+namespace XivFatalFrame.Hooking;
 
 internal unsafe class FatalFrameEventHook : IDisposable
 {
@@ -17,9 +20,9 @@ internal unsafe class FatalFrameEventHook : IDisposable
     private readonly ScreenshotTaker ScreenshotTaker;
     private readonly Configuration   Configuration;
     private readonly Sheets          Sheets;
+    private readonly IPVPSetter      PVPSetter;
 
     private bool IsDead  = false;
-    private bool IsInPvp = false;
 
     private const uint SpearFishIdOffset = 20000;
 
@@ -43,12 +46,13 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
     private readonly Hook<RaptureAtkModuleUpdateDelegate>?      RaptureAtkModuleUpdateHook;
 
-    public FatalFrameEventHook(DalamudServices dalamudServices, ScreenshotTaker screenshotTaker, Configuration configuration, Sheets sheets)
+    public FatalFrameEventHook(DalamudServices dalamudServices, ScreenshotTaker screenshotTaker, Configuration configuration, Sheets sheets, IPVPSetter pvpSetter)
     {
         DalamudServices = dalamudServices;
         ScreenshotTaker = screenshotTaker;
         Configuration   = configuration;
         Sheets          = sheets;
+        PVPSetter       = pvpSetter;
 
         DalamudServices.Hooking.InitializeFromAttributes(this);
 
@@ -130,20 +134,12 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         IsDead = true;
 
-
-        if (IsInPvp && Configuration.TakeScreenshotOnDeath.EnabledInPvp)
-        {
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath.AfterDelayPVP, ScreenshotReason.Death);
-        }
-        else if (!IsInPvp && Configuration.TakeScreenshotOnDeath.TakeScreenshot)
-        {
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath.AfterDelay, ScreenshotReason.Death);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath, ScreenshotReason.Death);
     }
     
     private void HandleClientPVPState()
     {
-        IsInPvp = false;
+        PVPSetter.SetPVPState(false);
 
         if (DalamudServices.ClientState.LocalPlayer == null)
         {
@@ -155,7 +151,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
             return;
         }
 
-        IsInPvp = DalamudServices.ClientState.IsPvP;
+        PVPSetter.SetPVPState(DalamudServices.ClientState.IsPvP);
     }
 
     private void CheckFishy()
@@ -170,10 +166,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
         {
             DalamudServices.PluginLog.Information($"Found new fish caught with ID: {fishOutcome.Value}");
 
-            if (Configuration.TakeScreenshotOnFishCaught.TakeScreenshot)
-            {
-                ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught.AfterDelay, ScreenshotReason.Fish);
-            }
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught, ScreenshotReason.Fish);
         }
 
         uint? spfishOutcome = CheckFishies(ref _spearFishStore, PlayerState.Instance()->CaughtSpearfishBitmask);
@@ -182,10 +175,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
             spfishOutcome += SpearFishIdOffset;
             DalamudServices.PluginLog.Information($"Found new spearfish caught with ID: {spfishOutcome.Value}");
 
-            if (Configuration.TakeScreenshotOnFishCaught.TakeScreenshot)
-            {
-                ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught.AfterDelay, ScreenshotReason.Fish);
-            }
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught, ScreenshotReason.Fish);
         }
     }
 
@@ -193,10 +183,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.PluginLog.Information($"Detected Acquired Achievement with ID: {achievementID}");
         
-        if (Configuration.TakeScreenshotOnAchievement.TakeScreenshot)
-        {
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnAchievement.AfterDelay, ScreenshotReason.Achievement);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnAchievement, ScreenshotReason.Achievement);
 
         AchievementUnlockingHook!.Original(achievement, achievementID);
     }
@@ -205,10 +192,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.PluginLog.Information($"Detected a vista unlocked at index: {index}");
 
-        if (Configuration.TakeScreenshotOnEorzeaIncognita.TakeScreenshot)
-        {
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnEorzeaIncognita.AfterDelay, ScreenshotReason.SightseeingLog);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnEorzeaIncognita, ScreenshotReason.SightseeingLog);
 
         return VistaUnlockHook!.Original(index, a2, a3);
     }
@@ -277,23 +261,13 @@ internal unsafe class FatalFrameEventHook : IDisposable
             _questsCompleted.Add(questRowID);
             DalamudServices.PluginLog.Information($"Quest with ID {questRowID} and name {quest.Name.ExtractText()} has been found.");
 
-            if (Configuration.TakeScreenshotOnQuestComplete.TakeScreenshot)
-            {
-                ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnQuestComplete.AfterDelay, ScreenshotReason.QuestCompletion);
-            }
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnQuestComplete, ScreenshotReason.QuestCompletion);
         }
     }
 
     private void OnDutyCompleted(object? _, ushort dutyID)
     {
-        if (IsInPvp && Configuration.TakeScreenshotOnDutyCompletion.EnabledInPvp)
-        {
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath.AfterDelayPVP, ScreenshotReason.DutyCompletion);
-        }
-        else if (!IsInPvp && Configuration.TakeScreenshotOnDutyCompletion.TakeScreenshot)
-        {
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDeath.AfterDelay, ScreenshotReason.DutyCompletion);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDutyCompletion, ScreenshotReason.DutyCompletion);
     }
 
     private void OnLevelChanged(uint classJobId, uint level)
@@ -325,10 +299,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         DalamudServices.PluginLog.Information($"The class: {classJobId}, {arrayIndex}, {classJob.Value.Name.ExtractText()} leveled up from: {currentLevel} to {level}. This has been marked.");
 
-        if (Configuration.TakeScreenshotOnLevelup.TakeScreenshot)
-        {
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnLevelup.AfterDelay, ScreenshotReason.LevelUp);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnLevelup, ScreenshotReason.LevelUp);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetCompanionID          (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
@@ -450,10 +421,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
     private void CollectedNewItem()
     {
-        if (Configuration.TakeScreenshotOnItemUnlock.TakeScreenshot)
-        {
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnItemUnlock.AfterDelay, ScreenshotReason.ItemUnlocked);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnItemUnlock, ScreenshotReason.ItemUnlocked);
     }
 
     private void RaptureAtkModule_UpdateDetour(RaptureAtkModule* module, float deltaTime)

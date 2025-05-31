@@ -10,9 +10,13 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using XivFatalFrame.PVPHelpers.Interfaces;
+using XivFatalFrame.Services;
+using XivFatalFrame.SteamAPI;
+using XivFatalFrame.SteamAPI.Timeline;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 
-namespace XivFatalFrame;
+namespace XivFatalFrame.Screenshotter;
 
 internal unsafe class ScreenshotTaker : IDisposable
 {
@@ -24,7 +28,7 @@ internal unsafe class ScreenshotTaker : IDisposable
     private bool OurScreenshot                  = false;
     private bool OurChat                        = false;
 
-    private readonly List<ScreenshotElement> delays        = new List<ScreenshotElement>();
+    private readonly List<ScreenshotElement> delays = new List<ScreenshotElement>();
 
     private delegate byte IsInputIdClickedDelegate(UIInputData* uiInputData, int key);
     private delegate void ShowLogMessageDelegate(RaptureLogModule* logModule, uint logMessageId);
@@ -39,17 +43,21 @@ internal unsafe class ScreenshotTaker : IDisposable
     [Signature("48 89 5C 24 08 57 48 83 EC 20 BB 8B 07 00 00", DetourName = nameof(ScreenShotCallbackDetour))]
     private readonly Hook<ScreenShotCallbackDelegate>? ScreenShotCallbackHook = null;
 
-    private readonly DalamudServices DalamudServices;
-    private readonly IPluginLog Log;
-    private readonly Configuration Configuration;
+    private readonly DalamudServices    DalamudServices;
+    private readonly IPluginLog         Log;
+    private readonly Configuration      Configuration;
+    private readonly SteamHelper        SteamHelper;
+    private readonly IPVPReader         PVPReader;
 
     private ScreenshotReason lastReason = ScreenshotReason.Unknown;
 
-    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration)
+    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, SteamHelper steamHelper, IPVPReader pvpReader)
     {
         DalamudServices = dalamudServices;
-        Log = dalamudServices.PluginLog;
-        Configuration = configuration;
+        Log             = dalamudServices.PluginLog;
+        Configuration   = configuration;
+        SteamHelper     = steamHelper;
+        PVPReader       = pvpReader;
 
         dalamudServices.Hooking.InitializeFromAttributes(this);
     }
@@ -63,14 +71,67 @@ internal unsafe class ScreenshotTaker : IDisposable
         DalamudServices.ChatGui.CheckMessageHandled += OnChatMessage;
     }
 
-    public void TakeScreenshot(double delay, ScreenshotReason reason)
+    public void TakeScreenshot(SerializableSetting setting, ScreenshotReason reason)
+    {
+        if (setting is SerializablePvpSetting pvpSetting && PVPReader.IsInPVP)
+        {
+            HandleAsPVP(pvpSetting, reason);
+        }
+        else
+        {
+            HandleAsPVE(setting, reason);
+        }
+    }
+
+    private void HandleAsPVP(SerializablePvpSetting pvpSetting, ScreenshotReason reason)
+    {
+        if (!pvpSetting.EnabledInPvp)
+        {
+            Log.Verbose($"Want's to take a screenshot but the config disallowed it in a pvp setting.");
+
+            return;
+        }
+
+        TakeScreenshot(pvpSetting.AfterDelayPVP, reason);
+    }
+
+    private void HandleAsPVE(SerializableSetting setting, ScreenshotReason reason)
+    {
+        if (!setting.TakeScreenshot)
+        {
+            Log.Verbose($"Want's to take a screenshot but the config disallowed it.");
+
+            return;
+        }
+
+        TakeScreenshot(setting.AfterDelay, reason);
+    }
+
+    private void TakeScreenshot(double delay, ScreenshotReason reason)
     {
         if (IsInputIdClickedHook == null) return;
         if (!IsInputIdClickedHook.IsEnabled) return;
 
         Log.Verbose($"Taking screenshot in: {delay} seconds, {reason}");
 
-        delays.Add(new ScreenshotElement(delay, reason));
+        HandleSteamTimeline(reason, delay);
+
+        AddScreenshotToQueue(delay, reason);
+    }
+
+    private void AddScreenshotToQueue(double delay, ScreenshotReason reason)
+    {
+        // No way should there ever be queued more than 5 at once, this is just a safety precaution in case I pull a Glyceri moment later.
+        if (delays.Count > 5)
+        {
+            Log.Verbose($"Screenshot got waived due to max cap being reached.");
+
+            return;
+        }
+
+        ScreenshotElement screenshotElement = new ScreenshotElement(delay, reason);
+
+        delays.Add(screenshotElement);
     }
 
     public void Update(IFramework framework)
@@ -179,6 +240,32 @@ internal unsafe class ScreenshotTaker : IDisposable
         message.Payloads.AddRange(builder.ToReadOnlySeString().ToDalamudString().Payloads);
 
         lastReason = ScreenshotReason.Unknown;
+    }
+
+    private void HandleSteamTimeline(ScreenshotReason reason, double delay)
+    {
+        if (!Configuration.AddMarkToSteamTimelines)
+        {
+            Log.Verbose($"Tried adding to Steam Timeline but Configuration disallowed it.");
+            return;
+        }
+
+        SteamTimeline* steamTimeline = SteamTimeline.Get(Log, SteamHelper);
+        if (steamTimeline == null)
+        {
+            Log.Verbose($"Tried adding to Steam Timeline but SteamTimeline is null.");
+            return;
+        }
+
+        nint eventHandle = steamTimeline->AddInstantaneousTimelineEvent("FreezeFrameEvent", $"{reason}", SteamTimeline.GetSteamIconForReason(reason), 0, (float)delay, ETimelineEventClipPriority.Featured);
+        if (eventHandle == nint.Zero)
+        {
+            Log.Debug($"Tried adding to Steam Timeline but it failed.");
+        }
+        else
+        {
+            Log.Verbose($"Successfully added {reason} after {delay} to Steam Timeline.");
+        }
     }
 
     public void Dispose()
