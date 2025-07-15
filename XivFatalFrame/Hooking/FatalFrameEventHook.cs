@@ -308,11 +308,11 @@ internal unsafe class FatalFrameEventHook : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetSecretRecipeID       (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetUnlockLinkID         (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetFolkloreID           (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetFramerKitID          (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetOrnamentID           (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetGlassesID            (Lumina.Excel.Sheets.Item item) => GetItemAdditionalDataID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetTrippleTriadID       (Lumina.Excel.Sheets.Item item) => GetItemAdditionalDataID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetOrchestrionID        (Lumina.Excel.Sheets.Item item) => GetItemAdditionalDataID(item);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetFramerKitID          (Lumina.Excel.Sheets.Item item) => GetItemAdditionalDataID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetItemActionID         (Lumina.Excel.Sheets.Item item) => item.ItemAction.Value.Data[0];
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetItemAdditionalDataID (Lumina.Excel.Sheets.Item item) => item.AdditionalData.RowId;
 
@@ -325,48 +325,68 @@ internal unsafe class FatalFrameEventHook : IDisposable
         switch ((ItemActionType)item.ItemAction.Value.Type)
         {
             case ItemActionType.Companion:
+            {
                 itemIsUnlocked = UIState.Instance()->IsCompanionUnlocked(GetCompanionID(item));
                 return true;
+            }
 
             case ItemActionType.BuddyEquip:
+            {
                 itemIsUnlocked = UIState.Instance()->Buddy.CompanionInfo.IsBuddyEquipUnlocked(GetBuddyEquipID(item));
                 return true;
+            }
 
             case ItemActionType.Mount:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsMountUnlocked(GetMountID(item));
                 return true;
+            }
 
             case ItemActionType.SecretRecipeBook:
                 itemIsUnlocked = PlayerState.Instance()->IsSecretRecipeBookUnlocked(GetSecretRecipeID(item));
                 return true;
 
             case ItemActionType.UnlockLink:
+            {
                 itemIsUnlocked = UIState.Instance()->IsUnlockLinkUnlocked(GetUnlockLinkID(item));
                 return true;
+            }
 
             case ItemActionType.TripleTriadCard when item.AdditionalData.Is<Lumina.Excel.Sheets.TripleTriadCard>():
+            {
                 itemIsUnlocked = UIState.Instance()->IsTripleTriadCardUnlocked((ushort)GetTrippleTriadID(item));
                 return true;
+            }
 
             case ItemActionType.FolkloreTome:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsFolkloreBookUnlocked(GetFolkloreID(item));
                 return true;
+            }
 
             case ItemActionType.OrchestrionRoll when item.AdditionalData.Is<Lumina.Excel.Sheets.Orchestrion>():
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsOrchestrionRollUnlocked(GetOrchestrionID(item));
                 return true;
+            }
 
             case ItemActionType.FramersKit:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsFramersKitUnlocked(GetFramerKitID(item));
                 return true;
+            }
 
             case ItemActionType.Ornament:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsOrnamentUnlocked(GetOrnamentID(item));
                 return true;
+            }
 
             case ItemActionType.Glasses:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsGlassesUnlocked((ushort)GetGlassesID(item));
                 return true;
+            }
         }
 
         return true;
