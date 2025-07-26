@@ -66,6 +66,14 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         DalamudServices.DutyState.DutyCompleted         += OnDutyCompleted;
         DalamudServices.ClientState.LevelChanged        += OnLevelChanged;
+        DalamudServices.ClientState.Login               += OnLogin;
+    }
+
+    private void OnLogin()
+    {
+        DalamudServices.PluginLog.Verbose($"Detected a login, Reset() has been called.");
+
+        Reset();
     }
 
     public void Update(IFramework framework)
@@ -483,6 +491,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.DutyState.DutyCompleted     -= OnDutyCompleted;
         DalamudServices.ClientState.LevelChanged    -= OnLevelChanged;
+        DalamudServices.ClientState.Login           -= OnLogin;
 
         AchievementUnlockingHook?   .Dispose();
         VistaUnlockHook?            .Dispose();
