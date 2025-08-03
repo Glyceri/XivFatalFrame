@@ -1,6 +1,6 @@
 ﻿namespace XivFatalFrame.Screenshotter;
 
-internal enum ScreenshotReason
+public enum ScreenshotReason
 {
     Unknown,
     Death,
@@ -10,6 +10,7 @@ internal enum ScreenshotReason
     LevelUp,
     QuestCompletion,
     ItemUnlocked,
-    Fish
+    Fish,
+    GAME
 }
 

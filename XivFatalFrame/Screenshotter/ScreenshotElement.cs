@@ -1,13 +1,15 @@
-﻿namespace XivFatalFrame.Screenshotter;
+﻿using XivFatalFrame.ScreenshotDatabasing;
+
+namespace XivFatalFrame.Screenshotter;
 
 internal class ScreenshotElement
 {
     public          double           Timer;
-    public readonly ScreenshotReason Reason;
+    public readonly ScreenshotParams Params;
 
-    public ScreenshotElement(double timer, ScreenshotReason reason)
+    public ScreenshotElement(double timer, ScreenshotParams @params)
     {
         Timer  = timer;
-        Reason = reason;
+        Params = @params;
     }
 }

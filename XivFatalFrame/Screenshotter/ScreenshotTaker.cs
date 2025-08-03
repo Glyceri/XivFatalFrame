@@ -4,12 +4,15 @@ using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using Dalamud.Utility.Signatures;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 using XivFatalFrame.PVPHelpers.Interfaces;
+using XivFatalFrame.ScreenshotDatabasing;
+using XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
 using XivFatalFrame.Services;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
 
@@ -24,12 +27,16 @@ internal unsafe class ScreenshotTaker : IDisposable
     private bool OurLog                         = false;
     private bool OurScreenshot                  = false;
     private bool OurChat                        = false;
+    private bool MessageIsScreenshotLog         = false;
+    private bool IsScreenshotScheduled          = false;
 
     private readonly List<ScreenshotElement> delays = new List<ScreenshotElement>();
 
     private delegate byte IsInputIdClickedDelegate(UIInputData* uiInputData, int key);
     private delegate void ShowLogMessageDelegate(RaptureLogModule* logModule, uint logMessageId);
-    private delegate nint ScreenShotCallbackDelegate(nint a1, int a2);
+    private delegate nint ScreenShot_CallbackDelegate(nint a1, int a2);
+    private delegate byte ScreenShot_ScheduleScreenshotDelegate(nint a1, nint callback, nint callbackParam);
+    private delegate int Screenshot_CreateFilePathFromUtf8String(nint a1, Utf8String* path, char a3);
 
     [Signature("E9 ?? ?? ?? ?? 83 7F ?? ?? 0F 8F ?? ?? ?? ?? BA ?? ?? ?? ?? 48 8B CB", DetourName = nameof(IsInputIdClickedDetour))]
     private readonly Hook<IsInputIdClickedDelegate>? IsInputIdClickedHook = null;
@@ -38,21 +45,32 @@ internal unsafe class ScreenshotTaker : IDisposable
     private readonly Hook<ShowLogMessageDelegate>? ShowLogMessageHook = null;
 
     [Signature("48 89 5C 24 08 57 48 83 EC 20 BB 8B 07 00 00", DetourName = nameof(ScreenShotCallbackDetour))]
-    private readonly Hook<ScreenShotCallbackDelegate>? ScreenShotCallbackHook = null;
+    private readonly Hook<ScreenShot_CallbackDelegate>? ScreenShotCallbackHook = null;
+
+    [Signature("E8 ?? ?? ?? ?? 84 C0 75 15 C6 05 ?? ?? ?? ?? ?? ", DetourName = nameof(ScreenShotScheduleDetour))]
+    private readonly Hook<ScreenShot_ScheduleScreenshotDelegate>? ScreenShotScheduleHook = null;
+
+    [Signature("E8 ?? ?? ?? ?? 48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8D 8C 24 90 00 00 00 E8 ?? ?? ?? ?? 48 8B C6", DetourName = nameof(CreateFilePathFromUtf8StringDetour))]
+    private readonly Hook<Screenshot_CreateFilePathFromUtf8String>? CreateFilePathFromUtf8StringHook = null;
 
     private readonly DalamudServices    DalamudServices;
     private readonly IPluginLog         Log;
     private readonly Configuration      Configuration;
     private readonly IPVPReader         PVPReader;
+    private readonly ScreenshotDatabase ScreenshotDatabase;
 
-    private ScreenshotReason lastReason = ScreenshotReason.Unknown;
+    private          ScreenshotParams?      lastReason  = null;
+    private          string                 lastPath    = string.Empty;
+    private readonly List<ScreenshotParams> paramStack = new List<ScreenshotParams>();
+    private readonly List<string>           pathStack   = new List<string>();
 
-    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, IPVPReader pvpReader)
+    public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, ScreenshotDatabase screenshotDatabase, IPVPReader pvpReader)
     {
-        DalamudServices = dalamudServices;
-        Log             = dalamudServices.PluginLog;
-        Configuration   = configuration;
-        PVPReader       = pvpReader;
+        DalamudServices     = dalamudServices;
+        Log                 = dalamudServices.PluginLog;
+        Configuration       = configuration;
+        PVPReader           = pvpReader;
+        ScreenshotDatabase  = screenshotDatabase;
 
         dalamudServices.Hooking.InitializeFromAttributes(this);
     }
@@ -62,23 +80,27 @@ internal unsafe class ScreenshotTaker : IDisposable
         IsInputIdClickedHook?.Enable();
         ShowLogMessageHook?.Enable();
         ScreenShotCallbackHook?.Enable();
+        ScreenShotScheduleHook?.Enable();
+        CreateFilePathFromUtf8StringHook?.Enable();
 
         DalamudServices.ChatGui.CheckMessageHandled += OnChatMessage;
     }
 
-    public void TakeScreenshot(SerializableSetting setting, ScreenshotReason reason)
+    public void TakeScreenshot(SerializableSetting setting, ScreenshotParams screenshotParams)
     {
+        Log.Verbose($"Take a screenshot with the params: {screenshotParams.GetType()} [{screenshotParams.ToString()}]");
+
         if (setting is SerializablePvpSetting pvpSetting && PVPReader.IsInPVP)
         {
-            HandleAsPVP(pvpSetting, reason);
+            HandleAsPVP(pvpSetting, screenshotParams);
         }
         else
         {
-            HandleAsPVE(setting, reason);
+            HandleAsPVE(setting, screenshotParams);
         }
     }
 
-    private void HandleAsPVP(SerializablePvpSetting pvpSetting, ScreenshotReason reason)
+    private void HandleAsPVP(SerializablePvpSetting pvpSetting, ScreenshotParams screenshotParams)
     {
         if (!pvpSetting.EnabledInPvp)
         {
@@ -87,10 +109,10 @@ internal unsafe class ScreenshotTaker : IDisposable
             return;
         }
 
-        TakeScreenshot(pvpSetting.AfterDelayPVP, reason);
+        TakeScreenshot(pvpSetting.AfterDelayPVP, screenshotParams);
     }
 
-    private void HandleAsPVE(SerializableSetting setting, ScreenshotReason reason)
+    private void HandleAsPVE(SerializableSetting setting, ScreenshotParams screenshotParams)
     {
         if (!setting.TakeScreenshot)
         {
@@ -99,20 +121,20 @@ internal unsafe class ScreenshotTaker : IDisposable
             return;
         }
 
-        TakeScreenshot(setting.AfterDelay, reason);
+        TakeScreenshot(setting.AfterDelay, screenshotParams);
     }
 
-    private void TakeScreenshot(double delay, ScreenshotReason reason)
+    private void TakeScreenshot(double delay, ScreenshotParams screenshotParams)
     {
         if (IsInputIdClickedHook == null) return;
         if (!IsInputIdClickedHook.IsEnabled) return;
 
-        Log.Verbose($"Taking screenshot in: {delay} seconds, {reason}");
+        Log.Verbose($"Taking screenshot in: {delay} seconds, {screenshotParams}");
 
-        AddScreenshotToQueue(delay, reason);
+        AddScreenshotToQueue(delay, screenshotParams);
     }
 
-    private void AddScreenshotToQueue(double delay, ScreenshotReason reason)
+    private void AddScreenshotToQueue(double delay, ScreenshotParams screenshotParams)
     {
         // No way should there ever be queued more than 5 at once, this is just a safety precaution in case I pull a Glyceri moment later.
         if (delays.Count > 5)
@@ -122,7 +144,7 @@ internal unsafe class ScreenshotTaker : IDisposable
             return;
         }
 
-        ScreenshotElement screenshotElement = new ScreenshotElement(delay, reason);
+        ScreenshotElement screenshotElement = new ScreenshotElement(delay, screenshotParams);
 
         delays.Add(screenshotElement);
     }
@@ -137,7 +159,7 @@ internal unsafe class ScreenshotTaker : IDisposable
 
             if (delays[i].Timer > 0) continue;
 
-            lastReason = delays[i].Reason;
+            lastReason = delays[i].Params;
 
             delays.RemoveAt(i);
 
@@ -145,10 +167,46 @@ internal unsafe class ScreenshotTaker : IDisposable
         }
     }
 
+    private byte ScreenShotScheduleDetour(nint a1, nint callback, nint callbackParam)
+    {
+#if DEBUG
+        Log.Verbose("Scheduled Screenshot!");
+#endif
+
+        IsScreenshotScheduled = true;
+
+        return ScreenShotScheduleHook!.Original(a1, callback, callbackParam);
+    }
+    
+    private int CreateFilePathFromUtf8StringDetour(nint a1, Utf8String* path, char a3)
+    {
+        if (IsScreenshotScheduled)
+        {
+            if (path != null)
+            {
+                string currentPath = path->ToString();
+
+#if DEBUG
+                Log.Verbose($"Created file path at: {currentPath}");
+#endif
+
+                lastPath = currentPath;
+            }
+        }
+
+        return CreateFilePathFromUtf8StringHook!.Original(a1, path, a3);
+    }
+
     private void ShowLogMessageDetour(RaptureLogModule* raptureLogModule, uint logMessageId)
     {
+#if DEBUG
+        Log.Verbose($"Log Message: {logMessageId}");
+#endif
+
         if (logMessageId == ScreenshotLogMessageId)
         {
+            MessageIsScreenshotLog = true;
+
             if (OurLog)
             {
                 if (Configuration.SilenceLog)
@@ -165,6 +223,24 @@ internal unsafe class ScreenshotTaker : IDisposable
 
     private nint ScreenShotCallbackDetour(nint a1, int a2)
     {
+#if DEBUG
+        Log.Verbose($"Screenshot callback!");
+#endif
+
+        if (IsScreenshotScheduled)
+        {
+            if (pathStack.Count > 10)
+            {
+                Log.Error("pathStack somehow got over 10, please tell Glyceri about this.");
+
+                pathStack.Clear();
+            }
+
+            pathStack.Add(lastPath);
+        }    
+
+        IsScreenshotScheduled = false;
+
         if (OurScreenshot)
         {
             OurLog = true;
@@ -186,14 +262,45 @@ internal unsafe class ScreenshotTaker : IDisposable
     {
         try
         {
-            if (key == ScreenshotKey && TakeScreenshotPressed)
+            bool isScreenshotKey = (key == ScreenshotKey);
+
+            if (isScreenshotKey && TakeScreenshotPressed)
             {
                 OurScreenshot = true;
             }
 
             byte outcome = IsInputIdClickedHook!.Original(uiInputData, key);
 
-            if (key == ScreenshotKey && TakeScreenshotPressed)
+            // Screenshot has been pressed
+            if (isScreenshotKey && (outcome != 0 || TakeScreenshotPressed))
+            {
+                if (TakeScreenshotPressed)  // Custom Reason
+                {
+                    if (paramStack.Count > 10)
+                    {
+                        paramStack.Clear();
+
+                        Log.Error("reasonStack exceeded 10, please tell Glyceri if you ever see this message.");
+                    }
+
+                    if (lastReason != null)
+                    {
+                        paramStack.Add(lastReason);
+                    }
+                    else
+                    {
+                        paramStack.Add(new GameParameters());
+                    }
+
+                    lastReason = null;
+                }
+                else
+                {
+                    paramStack.Add(new GameParameters());
+                }
+            }    
+
+            if (isScreenshotKey && TakeScreenshotPressed)
             {
                 TakeScreenshotPressed = false;
                 outcome = 1;
@@ -211,6 +318,33 @@ internal unsafe class ScreenshotTaker : IDisposable
 
     private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool handled)
     {
+        ScreenshotParams? currentParams  = null;
+        string            currentPath    = string.Empty;
+
+        if (MessageIsScreenshotLog)
+        {
+            if (paramStack.Count > 0)
+            {
+                currentParams = paramStack[0];
+
+                paramStack.RemoveAt(0);
+            }
+
+            if (pathStack.Count > 0)
+            {
+                currentPath = pathStack[0];
+
+                pathStack.RemoveAt(0);
+            }
+
+#if DEBUG
+            Log.Verbose($"Screenshot reason: [{currentParams?.ToString() ?? "currentParams is NULL!"}]");
+            Log.Verbose($"Screenshot made at: [{currentPath}]");
+#endif
+        }
+
+        MessageIsScreenshotLog = false;
+
         if (!OurChat)
         {
             return;
@@ -218,21 +352,41 @@ internal unsafe class ScreenshotTaker : IDisposable
 
         OurChat = false;
 
+        if (currentParams == null)
+        {
+            return;
+        }
+
+        if (currentPath.IsNullOrWhitespace())
+        {
+            return;
+        }
+
+        ScreenshotDatabase.AddEntryToDatabase(new DatabaseEntry(DateTime.Now, currentPath, currentParams));
+
+        if (handled)
+        {
+            return;
+        }
+
         if (!Configuration.CustomLogMessage)
+        {
+            return;
+        }
+
+        if (currentParams is GameParameters)
         {
             return;
         }
 
         LSeStringBuilder builder = new LSeStringBuilder();
 
-        builder.PushColorRgba(new Vector4(1.0f, 0.4f, 0.4f, 1f));
-        builder.Append($"Fatal Frame took a Screenshot. [{lastReason}]");
-        builder.PopColor();
+        _ = builder.PushColorRgba(new Vector4(1.0f, 0.4f, 0.4f, 1f));
+        _ = builder.Append($"Fatal Frame took a Screenshot. [{currentParams.ScreenshotReason}]");
+        _ = builder.PopColor();
 
         message.Payloads.Clear();
         message.Payloads.AddRange(builder.ToReadOnlySeString().ToDalamudString().Payloads);
-
-        lastReason = ScreenshotReason.Unknown;
     }
 
     public void Dispose()
@@ -242,5 +396,7 @@ internal unsafe class ScreenshotTaker : IDisposable
         IsInputIdClickedHook?.Dispose();
         ShowLogMessageHook?.Dispose();
         ScreenShotCallbackHook?.Dispose();
+        ScreenShotScheduleHook?.Dispose();
+        CreateFilePathFromUtf8StringHook?.Dispose();
     }
 }

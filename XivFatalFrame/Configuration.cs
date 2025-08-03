@@ -1,6 +1,7 @@
 ﻿using Dalamud.Configuration;
 using Dalamud.Plugin;
 using System;
+using XivFatalFrame.ScreenshotDatabasing;
 
 namespace XivFatalFrame;
 
