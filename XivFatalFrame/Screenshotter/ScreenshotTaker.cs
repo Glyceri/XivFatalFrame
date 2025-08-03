@@ -59,10 +59,10 @@ internal unsafe class ScreenshotTaker : IDisposable
     private readonly IPVPReader         PVPReader;
     private readonly ScreenshotDatabase ScreenshotDatabase;
 
-    private          ScreenshotParams?      lastReason  = null;
-    private          string                 lastPath    = string.Empty;
-    private readonly List<ScreenshotParams> paramStack = new List<ScreenshotParams>();
-    private readonly List<string>           pathStack   = new List<string>();
+    private          ScreenshotParams?       lastReason  = null;
+    private          string                  lastPath    = string.Empty;
+    private readonly List<ScreenshotParams?> paramStack  = new List<ScreenshotParams?>();
+    private readonly List<string>            pathStack   = new List<string>();
 
     public ScreenshotTaker(DalamudServices dalamudServices, Configuration configuration, ScreenshotDatabase screenshotDatabase, IPVPReader pvpReader)
     {
@@ -289,14 +289,14 @@ internal unsafe class ScreenshotTaker : IDisposable
                     }
                     else
                     {
-                        paramStack.Add(new GameParameters());
+                        paramStack.Add(null);
                     }
 
                     lastReason = null;
                 }
                 else
                 {
-                    paramStack.Add(new GameParameters());
+                    paramStack.Add(null);
                 }
             }    
 
@@ -370,11 +370,6 @@ internal unsafe class ScreenshotTaker : IDisposable
         }
 
         if (!Configuration.CustomLogMessage)
-        {
-            return;
-        }
-
-        if (currentParams is GameParameters)
         {
             return;
         }

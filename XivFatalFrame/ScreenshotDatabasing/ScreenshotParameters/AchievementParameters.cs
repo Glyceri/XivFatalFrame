@@ -1,4 +1,5 @@
-﻿using XivFatalFrame.Screenshotter;
+﻿using XivFatalFrame.Hooking;
+using XivFatalFrame.Screenshotter;
 
 namespace XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
 
@@ -10,7 +11,7 @@ public class AchievementParameters : ScreenshotParams
 
     public AchievementParameters() { }
 
-    public AchievementParameters(uint achievementId)
+    public AchievementParameters(BasicScreenshotData screenshotData, uint achievementId) : base(screenshotData)
     {
         AchievementId = achievementId;
     }

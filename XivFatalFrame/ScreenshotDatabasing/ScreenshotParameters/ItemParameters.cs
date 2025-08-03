@@ -1,4 +1,5 @@
-﻿using XivFatalFrame.Screenshotter;
+﻿using XivFatalFrame.Hooking;
+using XivFatalFrame.Screenshotter;
 
 namespace XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
 
@@ -10,7 +11,7 @@ public class ItemParameters : ScreenshotParams
 
     public ItemParameters() { }
 
-    public ItemParameters(uint itemId)
+    public ItemParameters(BasicScreenshotData screenshotData, uint itemId) : base(screenshotData)
     {
         ItemId = itemId;
     }

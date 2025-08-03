@@ -1,4 +1,5 @@
-﻿using XivFatalFrame.Screenshotter;
+﻿using XivFatalFrame.Hooking;
+using XivFatalFrame.Screenshotter;
 
 namespace XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
 
@@ -11,7 +12,7 @@ public class FishParameters : ScreenshotParams
 
     public FishParameters() { }
 
-    public FishParameters(bool isSpearfish, uint fishId)
+    public FishParameters(BasicScreenshotData screenshotData, bool isSpearfish, uint fishId) : base(screenshotData)
     {
         IsSpearfish = isSpearfish;
         FishId      = fishId;

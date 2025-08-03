@@ -12,6 +12,7 @@ internal class Sheets
     private readonly ExcelSheet<Quest>          Quests;
     private readonly ExcelSheet<Item>           Items;
     private readonly ExcelSheet<Action>         Actions;
+    private readonly ExcelSheet<Map>            Maps;
 
     public Quest[]  AllQuests   => Quests.ToArray();
     public Item[]   AllItems    => Items.ToArray();
@@ -24,6 +25,7 @@ internal class Sheets
         Quests              = DalamudServices.DataManager.GetExcelSheet<Quest>();
         Items               = DalamudServices.DataManager.GetExcelSheet<Item>();
         Actions             = DalamudServices.DataManager.GetExcelSheet<Action>();
+        Maps                = DalamudServices.DataManager.GetExcelSheet<Map>();
     }
 
     public ClassJob? GetClassJob(uint id)
@@ -45,6 +47,18 @@ internal class Sheets
             if (action.RowId != id) continue;
 
             return action;
+        }
+
+        return null;
+    }
+
+    public Map? GetMap(uint id)
+    {
+        foreach (Map map in Maps)
+        {
+            if (map.RowId != id) continue;
+
+            return map;
         }
 
         return null;

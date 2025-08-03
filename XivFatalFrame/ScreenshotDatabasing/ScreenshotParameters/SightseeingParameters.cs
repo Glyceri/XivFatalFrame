@@ -1,4 +1,5 @@
-﻿using XivFatalFrame.Screenshotter;
+﻿using XivFatalFrame.Hooking;
+using XivFatalFrame.Screenshotter;
 
 namespace XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
 
@@ -10,7 +11,7 @@ public class SightseeingParameters : ScreenshotParams
 
     public SightseeingParameters() { }
 
-    public SightseeingParameters(ushort vistaIndex)
+    public SightseeingParameters(BasicScreenshotData screenshotData, ushort vistaIndex) : base(screenshotData)
     {
         VistaIndex = vistaIndex;
     }

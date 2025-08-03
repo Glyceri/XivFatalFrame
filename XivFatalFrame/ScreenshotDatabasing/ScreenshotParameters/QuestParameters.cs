@@ -1,4 +1,5 @@
-﻿using XivFatalFrame.Screenshotter;
+﻿using XivFatalFrame.Hooking;
+using XivFatalFrame.Screenshotter;
 
 namespace XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
 
@@ -10,7 +11,7 @@ public class QuestParameters : ScreenshotParams
 
     public QuestParameters() { }
 
-    public QuestParameters(uint questId)
+    public QuestParameters(BasicScreenshotData screenshotData, uint questId) : base(screenshotData)
     {
         QuestId = questId;
     }

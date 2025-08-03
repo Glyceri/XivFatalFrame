@@ -1,4 +1,5 @@
-﻿using Dalamud.Hooking;
+﻿using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -12,6 +13,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using XivFatalFrame.Hooking.Death;
 using XivFatalFrame.PVPHelpers.Interfaces;
+using XivFatalFrame.ScreenshotDatabasing;
 using XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
 using XivFatalFrame.Screenshotter;
 using XivFatalFrame.Services;
@@ -21,11 +23,12 @@ namespace XivFatalFrame.Hooking;
 
 internal unsafe class FatalFrameEventHook : IDisposable
 {
-    private readonly DalamudServices DalamudServices;
-    private readonly ScreenshotTaker ScreenshotTaker;
-    private readonly Configuration   Configuration;
-    private readonly Sheets          Sheets;
-    private readonly IPVPSetter      PVPSetter;
+    private readonly DalamudServices    DalamudServices;
+    private readonly ScreenshotTaker    ScreenshotTaker;
+    private readonly Configuration      Configuration;
+    private readonly Sheets             Sheets;
+    private readonly IPVPSetter         PVPSetter;
+    private readonly ScreenshotDatabase ScreenshotDatabase;
 
     private const uint SpearFishIdOffset = 20000;
 
@@ -37,6 +40,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     private          byte           _lastAcceptedQuestCount     = 0;
 
     private          DamageEvent?   lastDamageEvent             = null;
+    private       IPlayerCharacter? lastPlayerCharacter         = null;
 
     private delegate void OnAchievementUnlockDelegate       (Achievement* achievement, uint achievementID);
     private delegate nint VistaUnlockedDelegate             (ushort index, int a2, int a3);
@@ -57,13 +61,14 @@ internal unsafe class FatalFrameEventHook : IDisposable
     [Signature("E8 ?? ?? ?? ?? 0F B7 0B 83 E9 64",              DetourName = nameof(ProcessPacketActorControlDetour))]
     private readonly Hook<ProcessPacketActorControlDelegate>?   ProcessPacketActorControlHook = null!;
 
-    public FatalFrameEventHook(DalamudServices dalamudServices, ScreenshotTaker screenshotTaker, Configuration configuration, Sheets sheets, IPVPSetter pvpSetter)
+    public FatalFrameEventHook(DalamudServices dalamudServices, ScreenshotTaker screenshotTaker, Configuration configuration, Sheets sheets, IPVPSetter pvpSetter, ScreenshotDatabase screenshotDatabase)
     {
-        DalamudServices = dalamudServices;
-        ScreenshotTaker = screenshotTaker;
-        Configuration   = configuration;
-        Sheets          = sheets;
-        PVPSetter       = pvpSetter;
+        DalamudServices     = dalamudServices;
+        ScreenshotTaker     = screenshotTaker;
+        Configuration       = configuration;
+        Sheets              = sheets;
+        PVPSetter           = pvpSetter;
+        ScreenshotDatabase  = screenshotDatabase;
 
         DalamudServices.Hooking.InitializeFromAttributes(this);
 
@@ -85,6 +90,24 @@ internal unsafe class FatalFrameEventHook : IDisposable
         DalamudServices.ClientState.Login               += OnLogin;
     }
 
+    private BasicScreenshotData CreateBasicData()
+    {
+        if (DalamudServices.ClientState.LocalPlayer == null)
+        {
+            return new BasicScreenshotData();
+        }
+
+        return new BasicScreenshotData
+        (
+            DalamudServices.ClientState.LocalPlayer.ClassJob.RowId,
+            DalamudServices.ClientState.LocalPlayer.Level,
+            DalamudServices.ClientState.MapId,
+            DalamudServices.ClientState.TerritoryType,
+            WeatherManager.Instance()->GetCurrentWeather(),
+            FFXIVClientStructs.FFXIV.Client.System.Framework.Framework.Instance()->ClientTime.EorzeaTime
+        );
+    }
+
     private void OnLogin()
     {
         DalamudServices.PluginLog.Verbose($"Detected a login, Reset() has been called.");
@@ -97,6 +120,13 @@ internal unsafe class FatalFrameEventHook : IDisposable
         HandleClientPVPState();
         CheckFishy();
         CheckQuests();
+
+        if (lastPlayerCharacter != DalamudServices.ClientState.LocalPlayer)
+        {
+            lastPlayerCharacter = DalamudServices.ClientState.LocalPlayer;
+
+            ScreenshotDatabase.SetActiveUser(lastPlayerCharacter);
+        }
     }
 
     public void Reset()
@@ -232,12 +262,10 @@ internal unsafe class FatalFrameEventHook : IDisposable
                 Configuration.TakeScreenshotOnDeath,
                 new DeathParameters
                 (
-                    DalamudServices.ClientState.LocalPlayer.ClassJob.RowId,
-                    DalamudServices.ClientState.LocalPlayer.Level,
-                    DalamudServices.ClientState.TerritoryType,
-                    lastDamageEvent?.SourceName,
-                    lastDamageEvent?.Action,
-                    lastDamageEvent?.Amount
+                    CreateBasicData(),
+                    lastDamageEvent?.SourceName ?? string.Empty,
+                    lastDamageEvent?.Action ?? 0,
+                    lastDamageEvent?.Amount ?? 0
                 )
             );
         }
@@ -272,7 +300,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
         {
             DalamudServices.PluginLog.Information($"Found new fish caught with ID: {fishOutcome.Value}");
 
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught, new FishParameters(false, fishOutcome.Value));
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught, new FishParameters(CreateBasicData(), false, fishOutcome.Value));
         }
 
         uint? spfishOutcome = CheckFishies(ref _spearFishStore, PlayerState.Instance()->CaughtSpearfishBitmask);
@@ -281,7 +309,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
             spfishOutcome += SpearFishIdOffset;
             DalamudServices.PluginLog.Information($"Found new spearfish caught with ID: {spfishOutcome.Value}");
 
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught, new FishParameters(true, spfishOutcome.Value));
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught, new FishParameters(CreateBasicData(), true, spfishOutcome.Value));
         }
     }
 
@@ -289,7 +317,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.PluginLog.Information($"Detected Acquired Achievement with ID: {achievementID}");
         
-        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnAchievement, new AchievementParameters(achievementID));
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnAchievement, new AchievementParameters(CreateBasicData(), achievementID));
 
         AchievementUnlockingHook!.Original(achievement, achievementID);
     }
@@ -298,7 +326,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.PluginLog.Information($"Detected a vista unlocked at index: {index}");
 
-        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnEorzeaIncognita, new SightseeingParameters(index));
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnEorzeaIncognita, new SightseeingParameters(CreateBasicData(), index));
 
         return VistaUnlockHook!.Original(index, a2, a3);
     }
@@ -367,7 +395,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
             _questsCompleted.Add(questRowID);
             DalamudServices.PluginLog.Information($"Quest with ID {questRowID} and name {quest.Name.ExtractText()} has been found.");
 
-            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnQuestComplete, new QuestParameters(questRowID));
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnQuestComplete, new QuestParameters(CreateBasicData(), questRowID));
         }
     }
 
@@ -378,7 +406,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
             return;
         }
 
-        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDutyCompletion, new DutyParameters(dutyID, DalamudServices.ClientState.LocalPlayer.ClassJob.RowId, DalamudServices.ClientState.LocalPlayer.Level));
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDutyCompletion, new DutyParameters(CreateBasicData(), dutyID));
     }
 
     private void OnLevelChanged(uint classJobId, uint level)
@@ -410,7 +438,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         DalamudServices.PluginLog.Information($"The class: {classJobId}, {arrayIndex}, {classJob.Value.Name.ExtractText()} leveled up from: {currentLevel} to {level}. This has been marked.");
 
-        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnLevelup, new LevelUpParameters((byte)classJobId, (byte)level));
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnLevelup, new LevelUpParameters(CreateBasicData(), (byte)classJobId, (byte)level));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetCompanionID          (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
@@ -552,7 +580,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
     private void CollectedNewItem(Lumina.Excel.Sheets.Item item)
     {
-        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnItemUnlock, new ItemParameters(item.RowId));
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnItemUnlock, new ItemParameters(CreateBasicData(), item.RowId));
     }
 
     private void RaptureAtkModule_UpdateDetour(RaptureAtkModule* module, float deltaTime)

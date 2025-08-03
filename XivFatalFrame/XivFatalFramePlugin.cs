@@ -4,6 +4,7 @@ using Dalamud.Plugin.Services;
 using XivFatalFrame.Hooking;
 using XivFatalFrame.PVPHelpers;
 using XivFatalFrame.ScreenshotDatabasing;
+using XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
 using XivFatalFrame.Screenshotter;
 using XivFatalFrame.Services;
 using XivFatalFrame.Windowing;
@@ -42,7 +43,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, ScreenshotDatabase, PVPHelper);
         ScreenshotTaker         .Init();
 
-        FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets, PVPHelper);
+        FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets, PVPHelper, ScreenshotDatabase);
 
         _ = DalamudServices.CommandManager.AddHandler(FatalFrameCommand, new Dalamud.Game.Command.CommandInfo(OnCommand)
         {
@@ -60,11 +61,6 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi += () => { FatalFrameConfigWindow.IsOpen = true; };
 
         DalamudServices.Framework.Update            += Update;
-
-        foreach (DatabaseEntry entry in ScreenshotDatabase.GetEntries())
-        {
-            DalamudServices.PluginLog.Info($"Entry: [{entry.ScreenshotTime}] [{entry.ScreenshotPath}] [{entry.ScreenshotParams.ToString()}]");
-        }
     }
 
     private void Update(IFramework framework)
