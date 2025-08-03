@@ -209,11 +209,6 @@ internal unsafe class ScreenshotTaker : IDisposable
 
             if (OurLog)
             {
-                if (Configuration.SilenceLog)
-                {
-                    return;
-                }
-
                 OurChat = true;
             }
         }
@@ -371,6 +366,13 @@ internal unsafe class ScreenshotTaker : IDisposable
 
         if (!Configuration.CustomLogMessage)
         {
+            return;
+        }
+
+        if (Configuration.SilenceLog)
+        {
+            handled = true;
+
             return;
         }
 
