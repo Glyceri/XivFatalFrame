@@ -24,6 +24,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     private readonly FatalFrameEventHook        FatalFrameEventHook;
     private readonly WindowSystem               WindowSystem;
     private readonly FatalFrameConfigWindow     FatalFrameConfigWindow;
+    private readonly FatalFrameLogWindow        FatalFrameLogWindow;
     private readonly ScreenshotDatabase         ScreenshotDatabase;
 
     public XivFatalFramePlugin(IDalamudPluginInterface pluginInterface)
@@ -54,11 +55,15 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         WindowSystem            = new WindowSystem("FatalFrame");
 
         FatalFrameConfigWindow  = new FatalFrameConfigWindow(Configuration, DalamudServices);
+        FatalFrameLogWindow     = new FatalFrameLogWindow(Configuration, DalamudServices, ScreenshotDatabase);
 
         WindowSystem.AddWindow(FatalFrameConfigWindow);
+        WindowSystem.AddWindow(FatalFrameLogWindow);
 
         PluginInterface.UiBuilder.Draw              += WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenConfigUi += () => { FatalFrameConfigWindow.IsOpen = true; };
+
+        PluginInterface.UiBuilder.OpenMainUi        += () => { FatalFrameLogWindow.IsOpen = true; };
+        PluginInterface.UiBuilder.OpenConfigUi      += () => { FatalFrameConfigWindow.IsOpen = true; };
 
         DalamudServices.Framework.Update            += Update;
     }
@@ -97,11 +102,15 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     public void Dispose()
     {
         WindowSystem.RemoveAllWindows();
+
         _ = DalamudServices.CommandManager.RemoveHandler(FatalFrameCommand);
+
         DalamudServices.Framework.Update -= Update;
-        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
+        PluginInterface.UiBuilder.Draw   -= WindowSystem.Draw;
+
         ScreenshotTaker.Dispose();
         FatalFrameEventHook.Dispose();
         ScreenshotDatabase.Dispose();
+        FatalFrameLogWindow.Dispose();
     }
 }

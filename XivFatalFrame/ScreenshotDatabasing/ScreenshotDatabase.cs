@@ -5,6 +5,7 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using LiteDB;
 using System;
+using System.Linq;
 
 namespace XivFatalFrame.ScreenshotDatabasing;
 
@@ -117,6 +118,11 @@ public unsafe class ScreenshotDatabase : IDisposable
         _timer = 0;
 
         // TODO: Reïmplement here database entry deletion when image no longer exists.
+    }
+
+    public DatabaseUser[] GetAllUsers()
+    {
+        return DatabaseEntries.FindAll().ToArray();
     }
 
     public void Dispose()
