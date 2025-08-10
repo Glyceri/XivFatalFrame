@@ -226,7 +226,7 @@ internal unsafe class ScreenshotTaker : IDisposable
         LSeStringBuilder builder = new LSeStringBuilder();
 
         builder.PushColorRgba(new Vector4(1.0f, 0.4f, 0.4f, 1f));
-        builder.Append($"Fatal Frame took a Screenshot. [{lastReason}]");
+        builder.Append("Fatal Frame took a Screenshot. [" + lastReason.ToString() + "]");
         builder.PopColor();
 
         message.Payloads.Clear();
