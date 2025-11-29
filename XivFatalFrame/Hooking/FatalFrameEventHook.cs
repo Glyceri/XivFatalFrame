@@ -1,24 +1,34 @@
-﻿using Dalamud.Hooking;
+﻿using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using XivFatalFrame.Hooking.Death;
+using XivFatalFrame.PVPHelpers.Interfaces;
+using XivFatalFrame.ScreenshotDatabasing;
+using XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
+using XivFatalFrame.Screenshotter;
+using XivFatalFrame.Services;
+using static FFXIVClientStructs.FFXIV.Client.Game.Character.ActionEffectHandler;
 
-namespace XivFatalFrame;
+namespace XivFatalFrame.Hooking;
 
 internal unsafe class FatalFrameEventHook : IDisposable
 {
-    private readonly DalamudServices DalamudServices;
-    private readonly ScreenshotTaker ScreenshotTaker;
-    private readonly Configuration   Configuration;
-    private readonly Sheets          Sheets;
-
-    private bool IsDead = false;
+    private readonly DalamudServices    DalamudServices;
+    private readonly ScreenshotTaker    ScreenshotTaker;
+    private readonly Configuration      Configuration;
+    private readonly Sheets             Sheets;
+    private readonly IPVPSetter         PVPSetter;
+    private readonly ScreenshotDatabase ScreenshotDatabase;
 
     private const uint SpearFishIdOffset = 20000;
 
@@ -29,29 +39,42 @@ internal unsafe class FatalFrameEventHook : IDisposable
     private readonly List<uint>     _unlockedItems              = [];
     private          byte           _lastAcceptedQuestCount     = 0;
 
+    private          DamageEvent?   lastDamageEvent             = null;
+    private       IPlayerCharacter? lastPlayerCharacter         = null;
 
     private delegate void OnAchievementUnlockDelegate       (Achievement* achievement, uint achievementID);
     private delegate nint VistaUnlockedDelegate             (ushort index, int a2, int a3);
     private delegate void RaptureAtkModuleUpdateDelegate    (RaptureAtkModule* ram, float deltaTime);
+    private delegate void ProcessPacketActionEffectDelegate (uint casterEntityId, Character* casterPtr, Vector3* targetPos, ActionEffectHandler.Header* header, ActionEffectHandler.TargetEffects* effects, GameObjectId* targetEntityIds);
+    private delegate void ProcessPacketActorControlDelegate (uint entityId, ActorControlCategory type, uint param1, uint param2, uint param3, uint param4, uint param5, uint param6, ulong param7, bool isReplay);
 
     [Signature("81 FA ?? ?? ?? ?? 0F 87 ?? ?? ?? ?? 53",        DetourName = nameof(AchievementUnlockedDetour))]
-    private readonly Hook<OnAchievementUnlockDelegate>?         AchievementUnlockingHook;
+    private readonly Hook<OnAchievementUnlockDelegate>?         AchievementUnlockingHook = null;
 
     [Signature("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 8B 4C 24 70 E8",  DetourName = nameof(OnVistaUnlockedDetour))]
-    private readonly Hook<VistaUnlockedDelegate>?               VistaUnlockHook;
+    private readonly Hook<VistaUnlockedDelegate>?               VistaUnlockHook = null;
 
     private readonly Hook<RaptureAtkModuleUpdateDelegate>?      RaptureAtkModuleUpdateHook;
 
-    public FatalFrameEventHook(DalamudServices dalamudServices, ScreenshotTaker screenshotTaker, Configuration configuration, Sheets sheets)
+    private readonly Hook<ProcessPacketActionEffectDelegate>?   ProcessPacketActionEffectHook;
+
+    [Signature("E8 ?? ?? ?? ?? 0F B7 0B 83 E9 64",              DetourName = nameof(ProcessPacketActorControlDetour))]
+    private readonly Hook<ProcessPacketActorControlDelegate>?   ProcessPacketActorControlHook = null!;
+
+    public FatalFrameEventHook(DalamudServices dalamudServices, ScreenshotTaker screenshotTaker, Configuration configuration, Sheets sheets, IPVPSetter pvpSetter, ScreenshotDatabase screenshotDatabase)
     {
-        DalamudServices = dalamudServices;
-        ScreenshotTaker = screenshotTaker;
-        Configuration   = configuration;
-        Sheets          = sheets;
+        DalamudServices     = dalamudServices;
+        ScreenshotTaker     = screenshotTaker;
+        Configuration       = configuration;
+        Sheets              = sheets;
+        PVPSetter           = pvpSetter;
+        ScreenshotDatabase  = screenshotDatabase;
 
         DalamudServices.Hooking.InitializeFromAttributes(this);
 
-        RaptureAtkModuleUpdateHook = DalamudServices.Hooking.HookFromAddress<RaptureAtkModuleUpdateDelegate>((nint)RaptureAtkModule.StaticVirtualTablePointer->Update, RaptureAtkModule_UpdateDetour);
+        RaptureAtkModuleUpdateHook      = DalamudServices.Hooking.HookFromAddress<RaptureAtkModuleUpdateDelegate>((nint)RaptureAtkModule.StaticVirtualTablePointer->Update, RaptureAtkModule_UpdateDetour);
+
+        ProcessPacketActionEffectHook   = DalamudServices.Hooking.HookFromSignature<ProcessPacketActionEffectDelegate>(ActionEffectHandler.Addresses.Receive.String, ProcessPacketActionEffectDetour);
 
         Reset();
 
@@ -59,15 +82,51 @@ internal unsafe class FatalFrameEventHook : IDisposable
         VistaUnlockHook?            .Enable();
         RaptureAtkModuleUpdateHook? .Enable();
 
+        ProcessPacketActionEffectHook?.Enable();
+        ProcessPacketActorControlHook?.Enable();
+
         DalamudServices.DutyState.DutyCompleted         += OnDutyCompleted;
         DalamudServices.ClientState.LevelChanged        += OnLevelChanged;
+        DalamudServices.ClientState.Login               += OnLogin;
+    }
+
+    private BasicScreenshotData CreateBasicData()
+    {
+        if (DalamudServices.ClientState.LocalPlayer == null)
+        {
+            return new BasicScreenshotData();
+        }
+
+        return new BasicScreenshotData
+        (
+            DalamudServices.ClientState.LocalPlayer.ClassJob.RowId,
+            DalamudServices.ClientState.LocalPlayer.Level,
+            DalamudServices.ClientState.MapId,
+            DalamudServices.ClientState.TerritoryType,
+            WeatherManager.Instance()->GetCurrentWeather(),
+            FFXIVClientStructs.FFXIV.Client.System.Framework.Framework.Instance()->ClientTime.EorzeaTime
+        );
+    }
+
+    private void OnLogin()
+    {
+        DalamudServices.PluginLog.Verbose($"Detected a login, Reset() has been called.");
+
+        Reset();
     }
 
     public void Update(IFramework framework)
     {
-        HandleDeathState();
+        HandleClientPVPState();
         CheckFishy();
         CheckQuests();
+
+        if (lastPlayerCharacter != DalamudServices.ClientState.LocalPlayer)
+        {
+            lastPlayerCharacter = DalamudServices.ClientState.LocalPlayer;
+
+            ScreenshotDatabase.SetActiveUser(lastPlayerCharacter);
+        }
     }
 
     public void Reset()
@@ -97,43 +156,136 @@ internal unsafe class FatalFrameEventHook : IDisposable
         }
     }
 
-    private void HandleDeathState()
+    private void ProcessPacketActionEffectDetour(uint casterEntityId, Character* casterPtr, Vector3* targetPos, ActionEffectHandler.Header* effectHeader, ActionEffectHandler.TargetEffects* effectArray, GameObjectId* targetEntityIds)
     {
+        ProcessPacketActionEffectHook!.Original(casterEntityId, casterPtr, targetPos, effectHeader, effectArray, targetEntityIds);
+
         if (DalamudServices.ClientState.LocalPlayer == null)
         {
-            IsDead = true;
+            return;
+        }
+
+        ulong localPlayerId = DalamudServices.ClientState.LocalPlayer.GameObjectId;
+
+        try
+        {
+            if (effectHeader->NumTargets == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < effectHeader->NumTargets; i++)
+            {
+                GameObjectId* gObjectId = &targetEntityIds[i];
+                if (gObjectId == null)
+                {
+                    continue;
+                }
+
+                if (localPlayerId != gObjectId->Id)
+                {
+                    continue;
+                }
+
+                for (int f = 0; f < 8; f++)
+                {
+                    ref Effect actionEffect = ref effectArray[i].Effects[f];
+
+                    if (actionEffect.Type == 0)
+                    {
+                        continue;
+                    }
+
+                    uint amount = actionEffect.Value;
+
+                    if ((actionEffect.Param4 & 0x40) == 0x40)
+                    {
+                        amount += (uint)actionEffect.Param3 << 16;
+                    }
+
+                    uint actionId = effectHeader->ActionType switch
+                    {
+                        ActionType.Mount => 0xD000000 + effectHeader->ActionId,
+                        ActionType.Item  => 0x2000000 + effectHeader->ActionId,
+                        _                => effectHeader->SpellId
+                    };
+
+                    if ((ActionEffectType)actionEffect.Type != ActionEffectType.Damage)
+                    {
+                        continue;
+                    }
+
+                    Lumina.Excel.Sheets.Action? action = Sheets.GetAction(actionId);
+
+                    if (action == null)
+                    {
+                        continue;
+                    }
+
+                    lastDamageEvent = new DamageEvent(casterPtr->NameString, action.Value.RowId, amount);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DalamudServices.PluginLog.Error(ex, "Error in ProcessPacketActionEffectDetour");
+        }
+    }
+
+    private void ProcessPacketActorControlDetour(uint entityId, ActorControlCategory type, uint param1, uint amount, uint param3, uint param4, uint param5, uint param6, ulong param7, bool flag)
+    {
+        ProcessPacketActorControlHook!.Original(entityId, type, param1, amount, param3, param4, param5, param6, param7, flag);
+
+        if (DalamudServices.ClientState.LocalPlayer == null)
+        {
+            return;
+        }
+
+        uint localPlayerId = DalamudServices.ClientState.LocalPlayer.EntityId;
+
+        if (entityId != localPlayerId)
+        {
+            return;
+        }
+
+        if (type == ActorControlCategory.DoT)
+        {
+            lastDamageEvent = new DamageEvent(amount);
+        }
+
+        if (type == ActorControlCategory.Death)
+        {
+            DalamudServices.PluginLog.Verbose($"You died and I think from this: {lastDamageEvent}");
+
+            ScreenshotTaker.TakeScreenshot
+            (
+                Configuration.TakeScreenshotOnDeath,
+                new DeathParameters
+                (
+                    CreateBasicData(),
+                    lastDamageEvent?.SourceName ?? string.Empty,
+                    lastDamageEvent?.Action ?? 0,
+                    lastDamageEvent?.Amount ?? 0
+                )
+            );
+        }
+    }
+    
+    private void HandleClientPVPState()
+    {
+        PVPSetter.SetPVPState(false);
+
+        if (DalamudServices.ClientState.LocalPlayer == null)
+        {
             return;
         }
 
         if (!DalamudServices.ClientState.LocalPlayer.IsValid())
         {
-            IsDead = true;
             return;
         }
 
-        if (!DalamudServices.ClientState.LocalPlayer.IsDead)
-        {
-            IsDead = false;
-        }
-
-        if (IsDead)
-        {
-            return;
-        }
-
-        if (!DalamudServices.ClientState.LocalPlayer.IsDead)
-        {
-            return;
-        }
-
-        IsDead = true;
-
-        if (!Configuration.TakeScreenshotOnDeath)
-        {
-            return;
-        }
-
-        ScreenshotTaker.TakeScreenshot(1.2, ScreenshotReason.Death);
+        PVPSetter.SetPVPState(DalamudServices.ClientState.IsPvP);
     }
 
     private void CheckFishy()
@@ -148,10 +300,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
         {
             DalamudServices.PluginLog.Information($"Found new fish caught with ID: {fishOutcome.Value}");
 
-            if (Configuration.TakeScreenshotOnFishCaught)
-            {
-                ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Fish);
-            }
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught, new FishParameters(CreateBasicData(), false, fishOutcome.Value));
         }
 
         uint? spfishOutcome = CheckFishies(ref _spearFishStore, PlayerState.Instance()->CaughtSpearfishBitmask);
@@ -160,10 +309,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
             spfishOutcome += SpearFishIdOffset;
             DalamudServices.PluginLog.Information($"Found new spearfish caught with ID: {spfishOutcome.Value}");
 
-            if (Configuration.TakeScreenshotOnFishCaught)
-            {
-                ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Fish);
-            }
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnFishCaught, new FishParameters(CreateBasicData(), true, spfishOutcome.Value));
         }
     }
 
@@ -171,10 +317,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.PluginLog.Information($"Detected Acquired Achievement with ID: {achievementID}");
         
-        if (Configuration.TakeScreenshotOnAchievement)
-        {
-            ScreenshotTaker.TakeScreenshot(2.5, ScreenshotReason.Achievement);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnAchievement, new AchievementParameters(CreateBasicData(), achievementID));
 
         AchievementUnlockingHook!.Original(achievement, achievementID);
     }
@@ -183,10 +326,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.PluginLog.Information($"Detected a vista unlocked at index: {index}");
 
-        if (Configuration.TakeScreenshotOnEorzeaIncognita)
-        {
-            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.SightseeingLog);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnEorzeaIncognita, new SightseeingParameters(CreateBasicData(), index));
 
         return VistaUnlockHook!.Original(index, a2, a3);
     }
@@ -255,19 +395,18 @@ internal unsafe class FatalFrameEventHook : IDisposable
             _questsCompleted.Add(questRowID);
             DalamudServices.PluginLog.Information($"Quest with ID {questRowID} and name {quest.Name.ExtractText()} has been found.");
 
-            if (Configuration.TakeScreenshotOnQuestComplete)
-            {
-                ScreenshotTaker.TakeScreenshot(1.2, ScreenshotReason.QuestCompletion);
-            }
+            ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnQuestComplete, new QuestParameters(CreateBasicData(), questRowID));
         }
     }
 
     private void OnDutyCompleted(object? _, ushort dutyID)
     {
-        if (Configuration.TakeScreenshotOnDutyCompletion)
+        if (DalamudServices.ClientState.LocalPlayer == null)
         {
-            ScreenshotTaker.TakeScreenshot(3, ScreenshotReason.DutyCompletion);
+            return;
         }
+
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDutyCompletion, new DutyParameters(CreateBasicData(), dutyID));
     }
 
     private void OnLevelChanged(uint classJobId, uint level)
@@ -299,10 +438,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
 
         DalamudServices.PluginLog.Information($"The class: {classJobId}, {arrayIndex}, {classJob.Value.Name.ExtractText()} leveled up from: {currentLevel} to {level}. This has been marked.");
 
-        if (Configuration.TakeScreenshotOnLevelup)
-        {
-            ScreenshotTaker.TakeScreenshot(1, ScreenshotReason.LevelUp);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnLevelup, new LevelUpParameters(CreateBasicData(), (byte)classJobId, (byte)level));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetCompanionID          (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
@@ -311,11 +447,11 @@ internal unsafe class FatalFrameEventHook : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetSecretRecipeID       (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetUnlockLinkID         (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetFolkloreID           (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetFramerKitID          (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetOrnamentID           (Lumina.Excel.Sheets.Item item) => GetItemActionID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetGlassesID            (Lumina.Excel.Sheets.Item item) => GetItemAdditionalDataID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetTrippleTriadID       (Lumina.Excel.Sheets.Item item) => GetItemAdditionalDataID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetOrchestrionID        (Lumina.Excel.Sheets.Item item) => GetItemAdditionalDataID(item);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetFramerKitID          (Lumina.Excel.Sheets.Item item) => GetItemAdditionalDataID(item);
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private ushort   GetItemActionID         (Lumina.Excel.Sheets.Item item) => item.ItemAction.Value.Data[0];
     [MethodImpl(MethodImplOptions.AggressiveInlining)] private uint     GetItemAdditionalDataID (Lumina.Excel.Sheets.Item item) => item.AdditionalData.RowId;
 
@@ -328,48 +464,68 @@ internal unsafe class FatalFrameEventHook : IDisposable
         switch ((ItemActionType)item.ItemAction.Value.Type)
         {
             case ItemActionType.Companion:
+            {
                 itemIsUnlocked = UIState.Instance()->IsCompanionUnlocked(GetCompanionID(item));
                 return true;
+            }
 
             case ItemActionType.BuddyEquip:
+            {
                 itemIsUnlocked = UIState.Instance()->Buddy.CompanionInfo.IsBuddyEquipUnlocked(GetBuddyEquipID(item));
                 return true;
+            }
 
             case ItemActionType.Mount:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsMountUnlocked(GetMountID(item));
                 return true;
+            }
 
             case ItemActionType.SecretRecipeBook:
                 itemIsUnlocked = PlayerState.Instance()->IsSecretRecipeBookUnlocked(GetSecretRecipeID(item));
                 return true;
 
             case ItemActionType.UnlockLink:
+            {
                 itemIsUnlocked = UIState.Instance()->IsUnlockLinkUnlocked(GetUnlockLinkID(item));
                 return true;
+            }
 
             case ItemActionType.TripleTriadCard when item.AdditionalData.Is<Lumina.Excel.Sheets.TripleTriadCard>():
+            {
                 itemIsUnlocked = UIState.Instance()->IsTripleTriadCardUnlocked((ushort)GetTrippleTriadID(item));
                 return true;
+            }
 
             case ItemActionType.FolkloreTome:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsFolkloreBookUnlocked(GetFolkloreID(item));
                 return true;
+            }
 
             case ItemActionType.OrchestrionRoll when item.AdditionalData.Is<Lumina.Excel.Sheets.Orchestrion>():
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsOrchestrionRollUnlocked(GetOrchestrionID(item));
                 return true;
+            }
 
             case ItemActionType.FramersKit:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsFramersKitUnlocked(GetFramerKitID(item));
                 return true;
+            }
 
             case ItemActionType.Ornament:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsOrnamentUnlocked(GetOrnamentID(item));
                 return true;
+            }
 
             case ItemActionType.Glasses:
+            {
                 itemIsUnlocked = PlayerState.Instance()->IsGlassesUnlocked((ushort)GetGlassesID(item));
                 return true;
+            }
         }
 
         return true;
@@ -395,7 +551,7 @@ internal unsafe class FatalFrameEventHook : IDisposable
             case ItemActionType.Ornament:
             case ItemActionType.Glasses:
             {
-                CollectedNewItem();
+                CollectedNewItem(item);
                 break;
             }
         }
@@ -422,12 +578,9 @@ internal unsafe class FatalFrameEventHook : IDisposable
         return freshlyUnlockedItems;
     }
 
-    private void CollectedNewItem()
+    private void CollectedNewItem(Lumina.Excel.Sheets.Item item)
     {
-        if (Configuration.TakeScreenshotOnItemUnlock)
-        {
-            ScreenshotTaker.TakeScreenshot(0.6, ScreenshotReason.ItemUnlocked);
-        }
+        ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnItemUnlock, new ItemParameters(CreateBasicData(), item.RowId));
     }
 
     private void RaptureAtkModule_UpdateDetour(RaptureAtkModule* module, float deltaTime)
@@ -469,9 +622,13 @@ internal unsafe class FatalFrameEventHook : IDisposable
     {
         DalamudServices.DutyState.DutyCompleted     -= OnDutyCompleted;
         DalamudServices.ClientState.LevelChanged    -= OnLevelChanged;
+        DalamudServices.ClientState.Login           -= OnLogin;
 
         AchievementUnlockingHook?   .Dispose();
         VistaUnlockHook?            .Dispose();
         RaptureAtkModuleUpdateHook? .Dispose();
+
+        ProcessPacketActionEffectHook?.Dispose();
+        ProcessPacketActorControlHook?.Dispose();
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace XivFatalFrame;
+﻿namespace XivFatalFrame.Hooking;
 
 internal enum ItemActionType : ushort
 {

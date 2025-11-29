@@ -1,6 +1,13 @@
 ﻿using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using XivFatalFrame.Hooking;
+using XivFatalFrame.PVPHelpers;
+using XivFatalFrame.ScreenshotDatabasing;
+using XivFatalFrame.ScreenshotDatabasing.ScreenshotParameters;
+using XivFatalFrame.Screenshotter;
+using XivFatalFrame.Services;
+using XivFatalFrame.Windowing;
 
 namespace XivFatalFrame;
 
@@ -12,10 +19,13 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     private readonly Sheets                     Sheets;
     private readonly IDalamudPluginInterface    PluginInterface;
     private readonly Configuration              Configuration;
+    private readonly PVPHelper                  PVPHelper;
     private readonly ScreenshotTaker            ScreenshotTaker;
     private readonly FatalFrameEventHook        FatalFrameEventHook;
     private readonly WindowSystem               WindowSystem;
     private readonly FatalFrameConfigWindow     FatalFrameConfigWindow;
+    private readonly FatalFrameLogWindow        FatalFrameLogWindow;
+    private readonly ScreenshotDatabase         ScreenshotDatabase;
 
     public XivFatalFramePlugin(IDalamudPluginInterface pluginInterface)
     {
@@ -24,15 +34,19 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
 
         Sheets                  = new Sheets(DalamudServices);
 
+        ScreenshotDatabase      = new ScreenshotDatabase(DalamudServices.PluginLog, pluginInterface);
+
         Configuration           = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration           .Initialize(PluginInterface);
 
-        ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration);
+        PVPHelper               = new PVPHelper();
+
+        ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, ScreenshotDatabase, PVPHelper);
         ScreenshotTaker         .Init();
 
-        FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets);
+        FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets, PVPHelper, ScreenshotDatabase);
 
-        DalamudServices.CommandManager.AddHandler(FatalFrameCommand, new Dalamud.Game.Command.CommandInfo(OnCommand)
+        _ = DalamudServices.CommandManager.AddHandler(FatalFrameCommand, new Dalamud.Game.Command.CommandInfo(OnCommand)
         {
             HelpMessage = "Configuration Screen for FatalFrame",
             ShowInHelp = true,
@@ -41,11 +55,15 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         WindowSystem            = new WindowSystem("FatalFrame");
 
         FatalFrameConfigWindow  = new FatalFrameConfigWindow(Configuration, DalamudServices);
+        FatalFrameLogWindow     = new FatalFrameLogWindow(Configuration, DalamudServices, ScreenshotDatabase);
 
         WindowSystem.AddWindow(FatalFrameConfigWindow);
+        WindowSystem.AddWindow(FatalFrameLogWindow);
 
         PluginInterface.UiBuilder.Draw              += WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenConfigUi      += () => FatalFrameConfigWindow.IsOpen = true;
+
+        PluginInterface.UiBuilder.OpenMainUi        += () => { FatalFrameLogWindow.IsOpen = true; };
+        PluginInterface.UiBuilder.OpenConfigUi      += () => { FatalFrameConfigWindow.IsOpen = true; };
 
         DalamudServices.Framework.Update            += Update;
     }
@@ -56,6 +74,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
 
         ScreenshotTaker.Update(framework);
         FatalFrameEventHook.Update(framework);
+        ScreenshotDatabase.Update(framework);
     }    
 
     private void ResetHandler()
@@ -83,10 +102,15 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     public void Dispose()
     {
         WindowSystem.RemoveAllWindows();
-        DalamudServices.CommandManager.RemoveHandler(FatalFrameCommand);
+
+        _ = DalamudServices.CommandManager.RemoveHandler(FatalFrameCommand);
+
         DalamudServices.Framework.Update -= Update;
-        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
+        PluginInterface.UiBuilder.Draw   -= WindowSystem.Draw;
+
         ScreenshotTaker.Dispose();
-        FatalFrameEventHook.Dispose();   
+        FatalFrameEventHook.Dispose();
+        ScreenshotDatabase.Dispose();
+        FatalFrameLogWindow.Dispose();
     }
 }
