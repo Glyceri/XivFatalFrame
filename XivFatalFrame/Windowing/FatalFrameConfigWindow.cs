@@ -66,26 +66,16 @@ internal class FatalFrameConfigWindow : Window
         DrawSetting("Take Screenshot On Quest Completion", ref Configuration.TakeScreenshotOnQuestComplete);
         DrawSetting("Take Screenshot On Item Unlocked", ref Configuration.TakeScreenshotOnItemUnlock);
 
-        if (false) // Will turn into steam API stuff later
-        {
-            ImGui.NewLine();
-
-            if (ImGui.Checkbox("Add event to Timeline on Steam##steamEvent", ref Configuration.AddMarkToSteamTimelines))
-            {
-                Configuration.Save();
-            }
-        }
-
         ImGui.NewLine();
 
-        if (ImGui.Checkbox("Silence Log##silenceLog",                                       ref Configuration.SilenceLog))
+        if (ImGui.Checkbox("Silence Log##silenceLog", ref Configuration.SilenceLog))
         {
             Configuration.Save();
         }
 
         ImGui.BeginDisabled(Configuration.SilenceLog);
 
-        if (ImGui.Checkbox("Custom Log##customLog",                                         ref Configuration.CustomLogMessage))
+        if (ImGui.Checkbox("Custom Log##customLog", ref Configuration.CustomLogMessage))
         {
             Configuration.Save();
         }
@@ -93,22 +83,22 @@ internal class FatalFrameConfigWindow : Window
         ImGui.EndDisabled();
     }
 
-    bool DrawHeader(string header)
+    private bool DrawHeader(string header)
     {
         return ImGui.CollapsingHeader(header + $"##header{header}");
     }
 
-    bool DrawCheckmark(string header, ref bool value)
+    private bool DrawCheckmark(string header, ref bool value)
     {
         return ImGui.Checkbox(header + $"##checkbox{header}", ref value);
     }
 
-    bool DrawSlider(string header, ref float value)
+    private bool DrawSlider(string header, ref float value)
     {
         return ImGui.SliderFloat($"After Delay##checkbox{header}", ref value, 0, 10);
     }
 
-    void DrawBasicSetting(string header, ref SerializableSetting setting)
+    private void DrawBasicSetting(string header, ref SerializableSetting setting)
     {
         if (DrawCheckmark(header, ref setting.TakeScreenshot))
         {
@@ -125,16 +115,22 @@ internal class FatalFrameConfigWindow : Window
         ImGui.EndDisabled();
     }
 
-    void DrawSetting(string header, ref SerializableSetting setting)
+    private void DrawSetting(string header, ref SerializableSetting setting)
     {
-        if (!DrawHeader(header)) return;
+        if (!DrawHeader(header))
+        {
+            return;
+        }
 
         DrawBasicSetting(header, ref setting);
     }
 
-    void DrawPVPSetting(string header, ref SerializablePvpSetting setting)
+    private void DrawPVPSetting(string header, ref SerializablePvpSetting setting)
     {
-        if (!DrawHeader(header)) return;
+        if (!DrawHeader(header))
+        {
+            return;
+        }
 
         SerializableSetting selfSetting = setting;
 

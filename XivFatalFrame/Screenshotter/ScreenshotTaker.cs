@@ -104,8 +104,15 @@ internal unsafe class ScreenshotTaker : IDisposable
 
     private void TakeScreenshot(double delay, ScreenshotReason reason)
     {
-        if (IsInputIdClickedHook == null) return;
-        if (!IsInputIdClickedHook.IsEnabled) return;
+        if (IsInputIdClickedHook == null)
+        {
+            return;
+        }
+
+        if (!IsInputIdClickedHook.IsEnabled)
+        {
+            return;
+        }
 
         Log.Verbose($"Taking screenshot in: {delay} seconds, {reason}");
 
@@ -135,7 +142,10 @@ internal unsafe class ScreenshotTaker : IDisposable
         {
             delays[i].Timer -= framework.UpdateDelta.TotalSeconds;
 
-            if (delays[i].Timer > 0) continue;
+            if (delays[i].Timer > 0)
+            {
+                continue;
+            }
 
             lastReason = delays[i].Reason;
 
@@ -223,14 +233,17 @@ internal unsafe class ScreenshotTaker : IDisposable
             return;
         }
 
-        LSeStringBuilder builder = new LSeStringBuilder();
-
-        builder.PushColorRgba(new Vector4(1.0f, 0.4f, 0.4f, 1f));
-        builder.Append("Fatal Frame took a Screenshot. [" + lastReason.ToString() + "]");
-        builder.PopColor();
+        // LOL... LMAO even
+        List<Payload> fatalFramePayloads = new LSeStringBuilder()
+        .PushColorRgba(new Vector4(1.0f, 0.4f, 0.4f, 1f))
+        .Append("Fatal Frame took a Screenshot. [" + lastReason.ToString() + "]")
+        .PopColor()
+        .ToReadOnlySeString()
+        .ToDalamudString()
+        .Payloads;
 
         message.Payloads.Clear();
-        message.Payloads.AddRange(builder.ToReadOnlySeString().ToDalamudString().Payloads);
+        message.Payloads.AddRange(fatalFramePayloads);
 
         lastReason = ScreenshotReason.Unknown;
     }
