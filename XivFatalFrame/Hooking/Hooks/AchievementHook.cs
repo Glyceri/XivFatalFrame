@@ -35,7 +35,7 @@ internal unsafe class AchievementHook : HookableElement
         }
 
         // This is a check the decomp code does
-        if (achievementId > 0xEF0)
+        if (achievementId > Sheets.AllAchievements.Length)
         {
             return true;
         }
