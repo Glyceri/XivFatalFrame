@@ -7,6 +7,8 @@ using XivFatalFrame.Screenshotter;
 using XivFatalFrame.Services;
 using XivFatalFrame.Windowing;
 
+using DalamudCommandInfo = Dalamud.Game.Command.CommandInfo;
+
 namespace XivFatalFrame;
 
 public sealed class XivFatalFramePlugin : IDalamudPlugin
@@ -19,7 +21,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     private readonly Configuration              Configuration;
     private readonly PVPHelper                  PVPHelper;
     private readonly ScreenshotTaker            ScreenshotTaker;
-    private readonly FatalFrameEventHook        FatalFrameEventHook;
+    private readonly HookHandler                HookHandler;
     private readonly WindowSystem               WindowSystem;
     private readonly FatalFrameConfigWindow     FatalFrameConfigWindow;
 
@@ -38,12 +40,12 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, PVPHelper);
         ScreenshotTaker         .Init();
 
-        FatalFrameEventHook     = new FatalFrameEventHook(DalamudServices, ScreenshotTaker, Configuration, Sheets, PVPHelper);
+        HookHandler             = new HookHandler(DalamudServices, ScreenshotTaker, Configuration, Sheets, PVPHelper);
 
-        DalamudServices.CommandManager.AddHandler(FatalFrameCommand, new Dalamud.Game.Command.CommandInfo(OnCommand)
+        _ = DalamudServices.CommandManager.AddHandler(FatalFrameCommand, new DalamudCommandInfo(OnCommand)
         {
             HelpMessage = "Configuration Screen for FatalFrame",
-            ShowInHelp = true,
+            ShowInHelp  = true,
         });
 
         WindowSystem            = new WindowSystem("FatalFrame");
@@ -63,24 +65,24 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         ResetHandler();
 
         ScreenshotTaker.Update(framework);
-        FatalFrameEventHook.Update(framework);
+        HookHandler.Update(framework);
     }    
 
     private void ResetHandler()
     {
-        if (DalamudServices.ClientState.LocalPlayer == null)
+        if (DalamudServices.ObjectTable.LocalPlayer == null)
         {
             return;
         }
 
-        if (lastLocalUserAddress == DalamudServices.ClientState.LocalPlayer.Address)
+        if (lastLocalUserAddress == DalamudServices.ObjectTable.LocalPlayer.Address)
         {
             return;
         }
 
-        lastLocalUserAddress = DalamudServices.ClientState.LocalPlayer.Address;
+        lastLocalUserAddress = DalamudServices.ObjectTable.LocalPlayer.Address;
 
-        FatalFrameEventHook.Reset();
+        HookHandler.Reset();
     }
 
     private void OnCommand(string command, string args)
@@ -91,10 +93,12 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     public void Dispose()
     {
         WindowSystem.RemoveAllWindows();
-        DalamudServices.CommandManager.RemoveHandler(FatalFrameCommand);
+
+        _ = DalamudServices.CommandManager.RemoveHandler(FatalFrameCommand);
+
         DalamudServices.Framework.Update -= Update;
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         ScreenshotTaker.Dispose();
-        FatalFrameEventHook.Dispose();
+        HookHandler.Dispose();
     }
 }
