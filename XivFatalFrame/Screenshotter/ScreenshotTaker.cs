@@ -18,14 +18,14 @@ namespace XivFatalFrame.Screenshotter;
 internal unsafe class ScreenshotTaker : IDisposable
 {
     private const int ScreenshotLogMessageId    = 1931;
-    private const int ScreenshotKey             = 551;
+    private const int ScreenshotKey             = 554;  // Have to find a way to always know what the screenshot key is :/
 
     private bool TakeScreenshotPressed          = false;
     private bool OurLog                         = false;
     private bool OurScreenshot                  = false;
     private bool OurChat                        = false;
 
-    private readonly List<ScreenshotElement> delays = new List<ScreenshotElement>();
+    private readonly List<ScreenshotElement> delays = [];
 
     private delegate byte IsInputIdClickedDelegate(UIInputData* uiInputData, int key);
     private delegate void ShowLogMessageDelegate(RaptureLogModule* logModule, uint logMessageId);
@@ -206,6 +206,7 @@ internal unsafe class ScreenshotTaker : IDisposable
             if (key == ScreenshotKey && TakeScreenshotPressed)
             {
                 TakeScreenshotPressed = false;
+
                 outcome = 1;
             }
 
