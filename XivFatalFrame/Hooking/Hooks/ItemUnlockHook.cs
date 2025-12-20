@@ -100,7 +100,7 @@ internal unsafe class ItemUnlockHook : HookableElement
             return false;
         }
 
-        switch ((ItemActionType)item.ItemAction.Value.Type)
+        switch ((ItemActionType)item.ItemAction.Value.Action.RowId)
         {
             case ItemActionType.Companion:
             {
@@ -192,7 +192,7 @@ internal unsafe class ItemUnlockHook : HookableElement
 
         DalamudServices.PluginLog.Verbose($"Detected Item Completion with ID: {item.RowId}");
 
-        switch ((ItemActionType)item.ItemAction.Value.Type)
+        switch ((ItemActionType)item.ItemAction.Value.Action.RowId)
         {
             case ItemActionType.Companion:
             case ItemActionType.BuddyEquip:

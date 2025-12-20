@@ -31,6 +31,16 @@ internal class Sheets
     public Achievement[] AllAchievements
         => [.. Achievements];
 
+    public Achievement? GetAchievement(uint achievementId)
+    {
+        if (!Achievements.TryGetRow(achievementId, out Achievement achievement))
+        {
+            return null;
+        }
+
+        return achievement;
+    }
+
     public ClassJob? GetClassJob(uint id)
     {
         foreach (ClassJob classJob in ClassJobs)
