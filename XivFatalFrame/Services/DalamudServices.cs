@@ -19,6 +19,7 @@ internal sealed class DalamudServices
     [PluginService] internal IDataManager            DataManager         { get; private set; } = null!;
     [PluginService] internal ICommandManager         CommandManager      { get; private set; } = null!;
     [PluginService] internal IChatGui                ChatGui             { get; private set; } = null!;
+    [PluginService] internal IGameGui                GameGui             { get; private set; } = null!;
 
     public static DalamudServices Create(IDalamudPluginInterface plugin, XivFatalFramePlugin petNicknames)
     {

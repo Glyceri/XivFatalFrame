@@ -1,4 +1,5 @@
-﻿using Dalamud.Hooking;
+﻿using Dalamud.Game.Gui;
+using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using System;
@@ -7,36 +8,28 @@ using System.Runtime.CompilerServices;
 using XivFatalFrame.PVPHelpers.Interfaces;
 using XivFatalFrame.Screenshotter;
 using XivFatalFrame.Services;
-
 using LuminaItem             = Lumina.Excel.Sheets.Item;
-using LuminaTrippleTriadCard = Lumina.Excel.Sheets.TripleTriadCard;
 using LuminaOrchestrion      = Lumina.Excel.Sheets.Orchestrion;
+using LuminaTrippleTriadCard = Lumina.Excel.Sheets.TripleTriadCard;
 
 namespace XivFatalFrame.Hooking.Hooks;
 
 // This will eventually become hasels unlock service c:
 internal unsafe class ItemUnlockHook : HookableElement
 {
-    private delegate void RaptureAtkModuleUpdateDelegate(RaptureAtkModule* ram, float deltaTime);
-
-    private readonly Hook<RaptureAtkModuleUpdateDelegate>? RaptureAtkModuleUpdateHook;
-
     private readonly List<uint> _unlockedItems = [];
 
     public ItemUnlockHook(HookHandler hookHandler, DalamudServices dalamudServices, ScreenshotTaker screenshotTaker, Configuration configuration, Sheets sheets, IPVPSetter pvpSetter) 
-        : base(hookHandler, dalamudServices, screenshotTaker, configuration, sheets, pvpSetter)
-    {
-        RaptureAtkModuleUpdateHook = DalamudServices.Hooking.HookFromAddress<RaptureAtkModuleUpdateDelegate>((nint)RaptureAtkModule.StaticVirtualTablePointer->Update, RaptureAtkModule_UpdateDetour);
-    }
+        : base(hookHandler, dalamudServices, screenshotTaker, configuration, sheets, pvpSetter) { }
 
     public override void Dispose()
     {
-        RaptureAtkModuleUpdateHook?.Dispose();
+        DalamudServices.GameGui.AgentUpdate -= OnAgentUpdate;
     }
 
     public override void Init()
     {
-        RaptureAtkModuleUpdateHook?.Enable();
+        DalamudServices.GameGui.AgentUpdate += OnAgentUpdate;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -254,40 +247,27 @@ internal unsafe class ItemUnlockHook : HookableElement
         ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnItemUnlock, ScreenshotReason.ItemUnlocked);
     }
 
-    private void RaptureAtkModule_UpdateDetour(RaptureAtkModule* module, float deltaTime)
+    private void OnAgentUpdate(AgentUpdateFlag updateFlag)
     {
-        if (DalamudServices.ObjectTable.LocalPlayer != null)
+        if (DalamudServices.ObjectTable.LocalPlayer == null)
         {
-            try
-            {
-                if (module->AgentUpdateFlag.HasFlag(RaptureAtkModule.AgentUpdateFlags.UnlocksUpdate) ||
-                    module->AgentUpdateFlag.HasFlag(RaptureAtkModule.AgentUpdateFlags.InventoryUpdate))
-                {
-                    DalamudServices.PluginLog.Verbose($"Unlocks Update Flag got set High: {module->AgentUpdateFlag}");
-
-                    List<LuminaItem> unlockedItems = GetNewlyUnlockedItems();
-
-                    foreach (LuminaItem item in unlockedItems)
-                    {
-                        DalamudServices.PluginLog.Verbose($"Detected Acquired Item with ID: {item.RowId} and the name: {item.Name.ExtractText()}");
-
-                        StoreItemUnlock(item);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                DalamudServices.PluginLog.Error(ex, "Error during RaptureAtkModule_UpdateDetour");
-            }
+            return;
         }
 
-        try
+        if (!updateFlag.HasFlag(AgentUpdateFlag.UnlocksUpdate) && !updateFlag.HasFlag(AgentUpdateFlag.InventoryUpdate))
         {
-            RaptureAtkModuleUpdateHook!.OriginalDisposeSafe(module, deltaTime);
+            return;
         }
-        catch (Exception e)
+
+        DalamudServices.PluginLog.Verbose($"Unlocks Update Flag got set High: {updateFlag}");
+
+        List<LuminaItem> unlockedItems = GetNewlyUnlockedItems();
+
+        foreach (LuminaItem item in unlockedItems)
         {
-            DalamudServices.PluginLog.Error(e, "Failed ATKModuleUpdate");
+            DalamudServices.PluginLog.Verbose($"Detected Acquired Item with ID: {item.RowId} and the name: {item.Name.ExtractText()}");
+
+            StoreItemUnlock(item);
         }
     }
 
