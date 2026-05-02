@@ -24,6 +24,10 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
     private readonly HookHandler                HookHandler;
     private readonly WindowSystem               WindowSystem;
     private readonly FatalFrameConfigWindow     FatalFrameConfigWindow;
+    
+    #if DEBUG
+    private readonly ScreenshotKeyFinder        ScreenshotKeyFinder;
+    #endif
 
     public XivFatalFramePlugin(IDalamudPluginInterface pluginInterface)
     {
@@ -40,6 +44,10 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         ScreenshotTaker         = new ScreenshotTaker(DalamudServices, Configuration, PVPHelper);
         ScreenshotTaker         .Init();
 
+        #if DEBUG
+        ScreenshotKeyFinder     = new ScreenshotKeyFinder(DalamudServices, Configuration);
+        #endif
+        
         HookHandler             = new HookHandler(DalamudServices, ScreenshotTaker, Configuration, Sheets, PVPHelper);
 
         _ = DalamudServices.CommandManager.AddHandler(FatalFrameCommand, new DalamudCommandInfo(OnCommand)
@@ -50,7 +58,7 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
 
         WindowSystem            = new WindowSystem("FatalFrame");
 
-        FatalFrameConfigWindow  = new FatalFrameConfigWindow(Configuration, DalamudServices);
+        FatalFrameConfigWindow  = new FatalFrameConfigWindow(Configuration, DalamudServices, ScreenshotTaker);
 
         WindowSystem.AddWindow(FatalFrameConfigWindow);
 
@@ -100,5 +108,9 @@ public sealed class XivFatalFramePlugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         ScreenshotTaker.Dispose();
         HookHandler.Dispose();
+        
+        #if DEBUG
+        ScreenshotKeyFinder?.Dispose();
+        #endif
     }
 }

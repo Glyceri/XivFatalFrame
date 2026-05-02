@@ -19,7 +19,7 @@ namespace XivFatalFrame.Screenshotter;
 internal unsafe class ScreenshotTaker : IDisposable
 {
     private const int ScreenshotLogMessageId    = 1931;
-    private const int ScreenshotKey             = 554;  // Have to find a way to always know what the screenshot key is :/
+    private const int ScreenshotKey             = 555;  // Have to find a way to always know what the screenshot key is :/
 
     private bool TakeScreenshotPressed          = false;
     private bool OurLog                         = false;
@@ -29,14 +29,12 @@ internal unsafe class ScreenshotTaker : IDisposable
     private readonly List<ScreenshotElement> delays = [];
 
     private delegate byte IsInputIdClickedDelegate(UIInputData* uiInputData, int key);
-    private delegate void ShowLogMessageDelegate(RaptureLogModule* logModule, uint logMessageId);
     private delegate nint ScreenShotCallbackDelegate(nint a1, int a2);
 
     [Signature("E9 ?? ?? ?? ?? 83 7F ?? ?? 0F 8F ?? ?? ?? ?? BA ?? ?? ?? ?? 48 8B CB", DetourName = nameof(IsInputIdClickedDetour))]
     private readonly Hook<IsInputIdClickedDelegate>? IsInputIdClickedHook = null;
-
-    [Signature("E9 ?? ?? ?? ?? BA B3 11 00 00", DetourName = nameof(ShowLogMessageDetour))]
-    private readonly Hook<ShowLogMessageDelegate>? ShowLogMessageHook = null;
+    
+    private readonly Hook<RaptureLogModule.Delegates.ShowLogMessage> ShowLogMessageHook;
 
     [Signature("48 89 5C 24 08 57 48 83 EC 20 BB 8B 07 00 00", DetourName = nameof(ScreenShotCallbackDetour))]
     private readonly Hook<ScreenShotCallbackDelegate>? ScreenShotCallbackHook = null;
@@ -54,7 +52,9 @@ internal unsafe class ScreenshotTaker : IDisposable
         Log             = dalamudServices.PluginLog;
         Configuration   = configuration;
         PVPReader       = pvpReader;
-
+        
+        ShowLogMessageHook = DalamudServices.Hooking.HookFromAddress<RaptureLogModule.Delegates.ShowLogMessage>((nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessage, ShowLogMessageDetour);
+        
         dalamudServices.Hooking.InitializeFromAttributes(this);
     }
 
@@ -64,7 +64,7 @@ internal unsafe class ScreenshotTaker : IDisposable
         ShowLogMessageHook?.Enable();
         ScreenShotCallbackHook?.Enable();
 
-        DalamudServices.ChatGui.CheckMessageHandled += OnChatMessage;
+        DalamudServices.ChatGui.ChatMessage += OnChatMessage;
     }
 
     public void TakeScreenshot(SerializableSetting setting, ScreenshotReason reason)
@@ -160,6 +160,8 @@ internal unsafe class ScreenshotTaker : IDisposable
     {
         if (logMessageId == ScreenshotLogMessageId)
         {
+            DalamudServices.PluginLog.Verbose($"Fatal Frame just detected SystemMessage. [{OurLog}]");
+            
             if (OurLog)
             {
                 if (Configuration.SilenceLog)
@@ -167,6 +169,8 @@ internal unsafe class ScreenshotTaker : IDisposable
                     return;
                 }
 
+                DalamudServices.PluginLog.Verbose($"It is our chat message.");
+                
                 OurChat = true;
             }
         }
@@ -181,6 +185,8 @@ internal unsafe class ScreenshotTaker : IDisposable
             OurLog = true;
         }
 
+        DalamudServices.PluginLog.Info($"Fatal Frame just detected that a screenshot was made. [{OurScreenshot}, {OurLog}]");
+        
         nint outcome = ScreenShotCallbackHook!.Original(a1, a2);
 
         if (OurLog)
@@ -206,6 +212,8 @@ internal unsafe class ScreenshotTaker : IDisposable
 
             if (key == ScreenshotKey && TakeScreenshotPressed)
             {
+                DalamudServices.PluginLog.Info("Fatal Frame just pressed the screenshot key!");
+                
                 TakeScreenshotPressed = false;
 
                 outcome = 1;
@@ -223,6 +231,8 @@ internal unsafe class ScreenshotTaker : IDisposable
 
     private void OnChatMessage(IHandleableChatMessage chatMessage)
     {
+        DalamudServices.PluginLog.Verbose("On Chat Message");
+        
         if (!OurChat)
         {
             return;
@@ -234,6 +244,8 @@ internal unsafe class ScreenshotTaker : IDisposable
         {
             return;
         }
+        
+        DalamudServices.PluginLog.Verbose("Attempting to write our screenshot message");
 
         // LOL... LMAO even
         List<Payload> fatalFramePayloads = new LSeStringBuilder()

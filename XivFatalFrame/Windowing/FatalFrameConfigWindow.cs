@@ -3,6 +3,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
 using Dalamud.Bindings.ImGui;
 using System.Numerics;
+using XivFatalFrame.Screenshotter;
 using XivFatalFrame.Services;
 
 namespace XivFatalFrame.Windowing;
@@ -12,7 +13,12 @@ internal class FatalFrameConfigWindow : Window
     private readonly Configuration      Configuration;
     private readonly DalamudServices    DalamudServices;
 
-    public FatalFrameConfigWindow(Configuration configuration, DalamudServices dalamudServices) : base("Fatal Frame", ImGuiWindowFlags.None, true)
+    #if DEBUG
+    private readonly ScreenshotTaker    ScreenshotTaker;
+    #endif
+    
+    public FatalFrameConfigWindow(Configuration configuration, DalamudServices dalamudServices, ScreenshotTaker screenshotTaker) 
+        : base("Fatal Frame", ImGuiWindowFlags.None, true)
     {
         Configuration   = configuration;
         DalamudServices = dalamudServices;
@@ -25,6 +31,10 @@ internal class FatalFrameConfigWindow : Window
             MinimumSize = new Vector2(280, 340),
             MaximumSize = new Vector2(430, 900),
         };
+        
+        #if DEBUG
+        ScreenshotTaker = screenshotTaker;
+        #endif
     }
 
     public override void Draw()
@@ -81,6 +91,20 @@ internal class FatalFrameConfigWindow : Window
         }
 
         ImGui.EndDisabled();
+        
+        #if DEBUG
+        
+        if (ImGui.Checkbox("[DEBUG] Silence Log Key##debugsilencelog", ref Configuration.DebugSilenceKeyLog))
+        {
+            Configuration.Save();
+        }
+        
+        if (ImGui.Button("Pretend Finished Duty"))
+        {
+           ScreenshotTaker.TakeScreenshot(Configuration.TakeScreenshotOnDutyCompletion, ScreenshotReason.DutyCompletion);
+        }
+        
+        #endif
     }
 
     private bool DrawHeader(string header)

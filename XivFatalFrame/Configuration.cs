@@ -22,6 +22,7 @@ public class Configuration : IPluginConfiguration
 
     public bool SilenceLog              = false;
     public bool CustomLogMessage        = true;
+    public bool DebugSilenceKeyLog      = false;
 
     [NonSerialized]
     private IDalamudPluginInterface? PluginInterface;
