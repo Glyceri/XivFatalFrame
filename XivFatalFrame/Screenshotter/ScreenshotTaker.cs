@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using Dalamud.Game.Chat;
 using XivFatalFrame.PVPHelpers.Interfaces;
 using XivFatalFrame.Services;
 using LSeStringBuilder = Lumina.Text.SeStringBuilder;
@@ -220,7 +221,7 @@ internal unsafe class ScreenshotTaker : IDisposable
         return 0;
     }
 
-    private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool handled)
+    private void OnChatMessage(IHandleableChatMessage chatMessage)
     {
         if (!OurChat)
         {
@@ -243,8 +244,8 @@ internal unsafe class ScreenshotTaker : IDisposable
         .ToDalamudString()
         .Payloads;
 
-        message.Payloads.Clear();
-        message.Payloads.AddRange(fatalFramePayloads);
+        chatMessage.Message.Payloads.Clear();
+        chatMessage.Message.Payloads.AddRange(fatalFramePayloads);
 
         lastReason = ScreenshotReason.Unknown;
     }
