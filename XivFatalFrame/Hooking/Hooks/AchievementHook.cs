@@ -1,6 +1,5 @@
 ﻿using Dalamud.Hooking;
 using Dalamud.Utility;
-using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using System;
 using System.Collections.Generic;
@@ -12,10 +11,7 @@ namespace XivFatalFrame.Hooking.Hooks;
 
 internal unsafe class AchievementHook : HookableElement
 {
-    private delegate void OnAchievementUnlockDelegate(Achievement* achievement, uint achievementID);
-
-    [Signature("81 FA ?? ?? ?? ?? 0F 87 ?? ?? ?? ?? 53", DetourName = nameof(AchievementUnlockedDetour))]
-    private readonly Hook<OnAchievementUnlockDelegate>? AchievementUnlockingHook = null;
+    private readonly Hook<Achievement.Delegates.SetAchievementCompleted> AchievementUnlockingHook;
 
     private readonly List<uint> SquareEnixSillyAchievements =
     [
@@ -23,7 +19,10 @@ internal unsafe class AchievementHook : HookableElement
     ];
 
     public AchievementHook(HookHandler hookHandler, DalamudServices dalamudServices, ScreenshotTaker screenshotTaker, Configuration configuration, Sheets sheets, IPVPSetter pvpSetter) 
-        : base(hookHandler, dalamudServices, screenshotTaker, configuration, sheets, pvpSetter) { }
+        : base(hookHandler, dalamudServices, screenshotTaker, configuration, sheets, pvpSetter)
+    {
+        AchievementUnlockingHook = dalamudServices.Hooking.HookFromAddress<Achievement.Delegates.SetAchievementCompleted>((nint)Achievement.MemberFunctionPointers.SetAchievementCompleted, AchievementUnlockedDetour);
+    }
 
     public override void Dispose()
     {
@@ -64,12 +63,7 @@ internal unsafe class AchievementHook : HookableElement
             return true;
         }
 
-        if (!SquareEnixSillyAchievements.Contains(achievementId))
-        {
-            return false;
-        }
-
-        return true;
+        return SquareEnixSillyAchievements.Contains(achievementId);
     }
 
     private void AchievementUnlockedDetour(Achievement* achievement, uint achievementId)
